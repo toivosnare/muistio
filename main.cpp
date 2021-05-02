@@ -1,6 +1,8 @@
 #include <windows.h>
+#include <commctrl.h>
 
 #define ID_EDIT 1
+#define ID_STATUS 2
 
 // Commands IDs
 #define COMMAND_NEW 1
@@ -16,6 +18,10 @@
 #define COMMAND_DELETE 11
 
 static HWND hwndEdit;
+static HWND hwndStatus;
+
+static const int STATUS_PART_AMOUNT = 5;
+static const int STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100};
 
 void Create(HWND hwnd) {
     HMENU hFileMenu = CreateMenu();
@@ -44,6 +50,33 @@ void Create(HWND hwnd) {
             WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL,
             0, 0, 0, 0, hwnd, (HMENU) ID_EDIT,
             NULL, NULL);
+
+    hwndStatus = CreateWindowW(STATUSCLASSNAMEW, NULL,
+            WS_CHILD | WS_VISIBLE,
+            0, 0, 0, 0, hwnd, (HMENU) ID_STATUS,
+            NULL, NULL);
+}
+
+void Resize(int width, int height) {
+    SendMessageW(hwndStatus, WM_SIZE, 0, 0);
+    RECT rect;
+    GetWindowRect(hwndStatus, &rect);
+    const LONG statusHeight = rect.bottom - rect.top;
+    const LONG statusWidth = rect.right - rect.left;
+
+    int statusPartEdges[STATUS_PART_AMOUNT];
+    int x = statusWidth;
+    for (int i = STATUS_PART_AMOUNT - 1; i > -1; --i) {
+        statusPartEdges[i] = x;
+        x -= STATUS_PART_WIDTHS[i];
+    }
+    SendMessageW(hwndStatus, SB_SETPARTS, STATUS_PART_AMOUNT, (LPARAM) statusPartEdges);
+    SendMessageW(hwndStatus, SB_SETTEXTW, 1, (LPARAM) L"Rivi 1, Sarake 1");
+    SendMessageW(hwndStatus, SB_SETTEXTW, 2, (LPARAM) L"100%");
+    SendMessageW(hwndStatus, SB_SETTEXTW, 3, (LPARAM) L"Windows (CRLF)");
+    SendMessageW(hwndStatus, SB_SETTEXTW, 4, (LPARAM) L"UTF-8");
+
+    MoveWindow(hwndEdit, 0, 0, width, height - statusHeight, TRUE);
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -51,9 +84,10 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     case WM_CREATE:
         Create(hwnd);
         break;
-    case WM_SIZE:
-        MoveWindow(hwndEdit, 0, 0, LOWORD(lParam), HIWORD(lParam), TRUE);
+    case WM_SIZE: {
+        Resize(LOWORD(lParam), HIWORD(lParam));
         break;
+    }
     case WM_COMMAND:
         switch (wParam) {
         case COMMAND_NEW:
