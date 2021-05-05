@@ -197,15 +197,20 @@ void SaveAs(HWND hwnd) {
         LPWSTR utf16Text = new WCHAR[utf16Length];
         GetWindowTextW(hwndEdit, utf16Text, utf16Length);
         const int flags = WC_ERR_INVALID_CHARS;
-        const int utf8Length = WideCharToMultiByte(CP_UTF8, flags, utf16Text, -1, NULL, 0, NULL, NULL);
+        int utf8Length = WideCharToMultiByte(CP_UTF8, flags, utf16Text, -1, NULL, 0, NULL, NULL);
         if (utf8Length == 0) {
             MessageBoxW(hwnd, L"Tiedosto sisältää laittomia merkkejä.", L"Virhe", MB_ICONERROR);
             CloseHandle(hFile);
             delete[] utf16Text;
             return;
         }
+        // Make space for the leading BOM.
+        utf8Length += 3;
         LPSTR utf8Text = new CHAR[utf8Length];
-        WideCharToMultiByte(CP_UTF8, flags, utf16Text, -1, utf8Text, utf8Length, NULL, NULL);
+        utf8Text[0] = '\xEF';
+        utf8Text[1] = '\xBB';
+        utf8Text[2] = '\xBF';
+        WideCharToMultiByte(CP_UTF8, flags, utf16Text, -1, &utf8Text[3], utf8Length - 3, NULL, NULL);
         DWORD numberOfBytesWritten;
         BOOL result = WriteFile(hFile, utf8Text, utf8Length, &numberOfBytesWritten, NULL);
         if (result == FALSE || numberOfBytesWritten != utf8Length)
@@ -215,9 +220,11 @@ void SaveAs(HWND hwnd) {
         break;
     }
     case UTF16LE: {
-        const int length = GetWindowTextLengthW(hwndEdit) + 1;
+        // Add space for the leading BOM and terminating null character.
+        const int length = GetWindowTextLengthW(hwndEdit) + 2;
         LPWSTR text = new WCHAR[length];
-        GetWindowTextW(hwndEdit, text, length);
+        text[0] = L'\xFEFF';
+        GetWindowTextW(hwndEdit, &text[1], length - 1);
         DWORD numberOfBytesWritten;
         BOOL result = WriteFile(hFile, text, length * sizeof(WCHAR), &numberOfBytesWritten, NULL);
         if (result == FALSE || numberOfBytesWritten != length * sizeof(WCHAR))
