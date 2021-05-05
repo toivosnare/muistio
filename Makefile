@@ -22,7 +22,7 @@ CXXFLAGS = /c /std:c++17 /nologo
 RCFLAGS = /nologo
 LDFLAGS = /nologo
 
-LIBS = user32.lib Comdlg32.lib
+LIBS = user32.lib Comdlg32.lib Comctl32.lib
 OBJS = main.obj fileio.obj encoding.res
 
 all: $(OBJS)

@@ -1,5 +1,7 @@
 #include "fileio.h"
 
+#include <cstdio>
+
 #include <windows.h>
 #include <commctrl.h>
 
@@ -81,6 +83,18 @@ static void Resize(int width, int height) {
     MoveWindow(hwndEdit, 0, 0, width, height - statusHeight, TRUE);
 }
 
+static void UpdatePosition() {
+    DWORD caret;
+    SendMessageW(hwndEdit, EM_GETSEL, (WPARAM) &caret, NULL);
+    LONG line = SendMessageW(hwndEdit, EM_LINEFROMCHAR, caret, NULL) + 1;
+    LONG start = SendMessageW(hwndEdit, EM_LINEINDEX, line - 1, NULL);
+    LONG column = caret - start + 1;
+    const INT SIZE = 24;
+    WCHAR text[SIZE];
+    swprintf_s(text, SIZE, L"Rivi %d, Sarake %d", line, column);
+    SendMessageW(hwndStatus, SB_SETTEXTW, 1, (LPARAM) text);
+}
+
 static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE:
@@ -91,6 +105,10 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         break;
     }
     case WM_COMMAND:
+        if (HIWORD(wParam) == EN_CHANGE) {
+            UpdatePosition();
+            break;
+        }
         switch (wParam) {
         case COMMAND_NEW:
             break;
