@@ -1,3 +1,5 @@
+#include "fileio.h"
+
 #include <windows.h>
 #include <commctrl.h>
 
@@ -17,13 +19,13 @@
 #define COMMAND_PASTE 10
 #define COMMAND_DELETE 11
 
-static HWND hwndEdit;
-static HWND hwndStatus;
+HWND hwndEdit;
+HWND hwndStatus;
 
 static const int STATUS_PART_AMOUNT = 5;
 static const int STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100};
 
-void Create(HWND hwnd) {
+static void Create(HWND hwnd) {
     HMENU hFileMenu = CreateMenu();
     AppendMenuW(hFileMenu, MF_STRING, COMMAND_NEW, L"Uusi\tCtrl+N");
     AppendMenuW(hFileMenu, MF_STRING, COMMAND_NEW_WINDOW, L"Uusi ikkuna\tCtrl+Vaihto+N");
@@ -57,7 +59,7 @@ void Create(HWND hwnd) {
             NULL, NULL);
 }
 
-void Resize(int width, int height) {
+static void Resize(int width, int height) {
     SendMessageW(hwndStatus, WM_SIZE, 0, 0);
     RECT rect;
     GetWindowRect(hwndStatus, &rect);
@@ -79,7 +81,7 @@ void Resize(int width, int height) {
     MoveWindow(hwndEdit, 0, 0, width, height - statusHeight, TRUE);
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE:
         Create(hwnd);
@@ -95,10 +97,12 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
         case COMMAND_NEW_WINDOW:
             break;
         case COMMAND_OPEN:
+            Open(hwnd);
             break;
         case COMMAND_SAVE:
             break;
         case COMMAND_SAVE_AS:
+            SaveAs(hwnd);
             break;
         case COMMAND_QUIT:
             PostQuitMessage(0);
@@ -132,7 +136,7 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     return NULL;
 }
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+static int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
     WNDCLASSW wc = {};
     wc.lpszClassName = L"Muistio";
     wc.hInstance     = hInstance;
