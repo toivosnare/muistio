@@ -4,6 +4,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <Richedit.h>
 
 #define ID_EDIT 1
 #define ID_STATUS 2
@@ -20,14 +21,40 @@
 #define COMMAND_COPY 9
 #define COMMAND_PASTE 10
 #define COMMAND_DELETE 11
+#define COMMAND_WORDWRAP 12
 
-HWND hwndEdit;
-HWND hwndStatus;
+static HWND hWndWrapEdit;
+static HWND hWndNoWrapEdit;
+static HWND hWndStatus;
+static HMENU hFormatMenu;
+static BOOL wrap = TRUE;
+static CONST INT STATUS_PART_AMOUNT = 5;
+static CONST INT STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100};
 
-static const int STATUS_PART_AMOUNT = 5;
-static const int STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100};
+HWND ActiveEdit() {
+    return wrap ? hWndWrapEdit : hWndNoWrapEdit;
+}
 
-static void Create(HWND hwnd) {
+static LRESULT CALLBACK EditProc(HWND hWnd, UINT uMsg, WPARAM wParam,
+        LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
+    if (uIdSubclass == wrap) {
+        switch (uMsg) {
+            case WM_SETCURSOR:
+            case WM_KEYDOWN:
+            case WM_KEYUP:
+            case WM_CHAR:
+            case WM_SYSKEYDOWN:
+            case WM_SYSKEYUP:
+            case WM_SYSCHAR:
+            case WM_SETTEXT:
+                SendMessageW(wrap ? hWndNoWrapEdit : hWndWrapEdit, uMsg, wParam, lParam);
+                break;
+        }
+    }
+    return DefSubclassProc(hWnd, uMsg, wParam, lParam);
+}
+
+static VOID Create(HWND hWnd) {
     HMENU hFileMenu = CreateMenu();
     AppendMenuW(hFileMenu, MF_STRING, COMMAND_NEW, L"Uusi\tCtrl+N");
     AppendMenuW(hFileMenu, MF_STRING, COMMAND_NEW_WINDOW, L"Uusi ikkuna\tCtrl+Vaihto+N");
@@ -45,54 +72,89 @@ static void Create(HWND hwnd) {
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_PASTE, L"Liitä\tCtrl+V");
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_DELETE, L"Poista\tDel");
 
+    hFormatMenu = CreateMenu();
+    AppendMenuW(hFormatMenu, MF_STRING, COMMAND_WORDWRAP, L"Automaattinen rivitys");
+    CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_CHECKED);
+
     HMENU hMenuBar = CreateMenu();
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFileMenu, L"Tiedosto");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hEditMenu, L"Muokkaa");
-    SetMenu(hwnd, hMenuBar);
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFormatMenu, L"Muotoile");
+    SetMenu(hWnd, hMenuBar);
 
-    hwndEdit = CreateWindowW(L"Edit", NULL, 
-            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_AUTOVSCROLL,
-            0, 0, 0, 0, hwnd, (HMENU) ID_EDIT,
+    hWndWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE,
+            0, 0, 0, 0, hWnd, (HMENU) ID_EDIT,
             NULL, NULL);
+    SetWindowSubclass(hWndWrapEdit, EditProc, TRUE, NULL);
+    hWndNoWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | WS_HSCROLL,
+            0, 0, 0, 0, hWnd, (HMENU) ID_EDIT,
+            NULL, NULL);
+    SetWindowSubclass(hWndNoWrapEdit, EditProc, FALSE, NULL);
+    ShowWindow(hWndNoWrapEdit, SW_HIDE);
 
-    hwndStatus = CreateWindowW(STATUSCLASSNAMEW, NULL,
+    hWndStatus = CreateWindowW(STATUSCLASSNAMEW, NULL,
             WS_CHILD | WS_VISIBLE,
-            0, 0, 0, 0, hwnd, (HMENU) ID_STATUS,
+            0, 0, 0, 0, hWnd, (HMENU) ID_STATUS,
             NULL, NULL);
 }
 
-static void Resize(int width, int height) {
-    SendMessageW(hwndStatus, WM_SIZE, 0, 0);
-    RECT rect;
-    GetWindowRect(hwndStatus, &rect);
-    const LONG statusHeight = rect.bottom - rect.top;
-    const LONG statusWidth = rect.right - rect.left;
+static VOID UpdateEncoding() {
+    SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) GetEncoding());
+}
 
-    int statusPartEdges[STATUS_PART_AMOUNT];
-    int x = statusWidth;
-    for (int i = STATUS_PART_AMOUNT - 1; i > -1; --i) {
+static VOID UpdatePosition() {
+    DWORD caret;
+    HWND edit = ActiveEdit();
+    SendMessageW(edit, EM_GETSEL, (WPARAM) &caret, NULL);
+    LONG line = SendMessageW(edit, EM_LINEFROMCHAR, caret, NULL) + 1;
+    LONG start = SendMessageW(edit, EM_LINEINDEX, line - 1, NULL);
+    LONG column = caret - start + 1;
+    CONST INT SIZE = 24;
+    WCHAR text[SIZE];
+    swprintf_s(text, SIZE, L"Rivi %d, Sarake %d", line, column);
+    SendMessageW(hWndStatus, SB_SETTEXTW, 1, (LPARAM) text);
+}
+
+static VOID Resize(LONG width, LONG height) {
+    SendMessageW(hWndStatus, WM_SIZE, 0, 0);
+    RECT rect;
+    GetWindowRect(hWndStatus, &rect);
+    CONST LONG statusHeight = rect.bottom - rect.top;
+
+    INT statusPartEdges[STATUS_PART_AMOUNT];
+    INT x = width;
+    for (INT i = STATUS_PART_AMOUNT - 1; i > -1; --i) {
         statusPartEdges[i] = x;
         x -= STATUS_PART_WIDTHS[i];
     }
-    SendMessageW(hwndStatus, SB_SETPARTS, STATUS_PART_AMOUNT, (LPARAM) statusPartEdges);
-    SendMessageW(hwndStatus, SB_SETTEXTW, 1, (LPARAM) L"Rivi 1, Sarake 1");
-    SendMessageW(hwndStatus, SB_SETTEXTW, 2, (LPARAM) L"100%");
-    SendMessageW(hwndStatus, SB_SETTEXTW, 3, (LPARAM) L"Windows (CRLF)");
-    SendMessageW(hwndStatus, SB_SETTEXTW, 4, (LPARAM) L"UTF-8");
-
-    MoveWindow(hwndEdit, 0, 0, width, height - statusHeight, TRUE);
+    SendMessageW(hWndStatus, SB_SETPARTS, STATUS_PART_AMOUNT, (LPARAM) statusPartEdges);
+    UpdatePosition();
+    SendMessageW(hWndStatus, SB_SETTEXTW, 2, (LPARAM) L"100%");
+    SendMessageW(hWndStatus, SB_SETTEXTW, 3, (LPARAM) L"Windows (CRLF)");
+    UpdateEncoding();
+    MoveWindow(ActiveEdit(), 0, 0, width, height - statusHeight, TRUE);
 }
 
-static void UpdatePosition() {
-    DWORD caret;
-    SendMessageW(hwndEdit, EM_GETSEL, (WPARAM) &caret, NULL);
-    LONG line = SendMessageW(hwndEdit, EM_LINEFROMCHAR, caret, NULL) + 1;
-    LONG start = SendMessageW(hwndEdit, EM_LINEINDEX, line - 1, NULL);
-    LONG column = caret - start + 1;
-    const INT SIZE = 24;
-    WCHAR text[SIZE];
-    swprintf_s(text, SIZE, L"Rivi %d, Sarake %d", line, column);
-    SendMessageW(hwndStatus, SB_SETTEXTW, 1, (LPARAM) text);
+static VOID ToggleWordWrap(HWND hWnd) {
+    RECT rect;
+    UINT state = GetMenuState(hFormatMenu, COMMAND_WORDWRAP, MF_BYCOMMAND);
+    if (state == MF_CHECKED) {
+        CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_UNCHECKED);
+        wrap = FALSE;
+        GetWindowRect(hWndWrapEdit, &rect);
+        ShowWindow(hWndWrapEdit, SW_HIDE);
+        ShowWindow(hWndNoWrapEdit, SW_SHOW);
+        MoveWindow(hWndNoWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
+    } else {
+        CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_CHECKED);
+        wrap = TRUE;
+        GetWindowRect(hWndNoWrapEdit, &rect);
+        ShowWindow(hWndNoWrapEdit, SW_HIDE);
+        ShowWindow(hWndWrapEdit, SW_SHOW);
+        MoveWindow(hWndWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
+    }
 }
 
 static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -104,11 +166,12 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         Resize(LOWORD(lParam), HIWORD(lParam));
         break;
     }
-    case WM_COMMAND:
-        if (HIWORD(wParam) == EN_CHANGE) {
+    case WM_COMMAND: {
+        if (HIWORD(wParam) == EN_UPDATE) {
             UpdatePosition();
             break;
         }
+        HWND edit = ActiveEdit();
         switch (wParam) {
         case COMMAND_NEW:
             break;
@@ -116,35 +179,41 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_OPEN:
             Open(hwnd);
+            UpdateEncoding();
             break;
         case COMMAND_SAVE:
             break;
         case COMMAND_SAVE_AS:
             SaveAs(hwnd);
+            UpdateEncoding();
             break;
         case COMMAND_QUIT:
             PostQuitMessage(0);
             break;
         case COMMAND_UNDO:
-            if (SendMessageW(hwndEdit, EM_CANUNDO, 0, 0))
-                SendMessageW(hwndEdit, WM_UNDO, 0, 0);
+            if (SendMessageW(edit, EM_CANUNDO, 0, 0))
+                SendMessageW(edit, WM_UNDO, 0, 0);
             break;
         case COMMAND_CUT:
-            SendMessageW(hwndEdit, WM_CUT, 0, 0);
+            SendMessageW(edit, WM_CUT, 0, 0);
             break;
         case COMMAND_COPY:
-            SendMessageW(hwndEdit, WM_COPY, 0, 0);
+            SendMessageW(edit, WM_COPY, 0, 0);
             break;
         case COMMAND_PASTE:
-            SendMessageW(hwndEdit, WM_PASTE, 0, 0);
+            SendMessageW(edit, WM_PASTE, 0, 0);
             break;
         case COMMAND_DELETE:
-            SendMessageW(hwndEdit, WM_CLEAR, 0, 0);
+            SendMessageW(edit, WM_CLEAR, 0, 0);
+            break;
+        case COMMAND_WORDWRAP:
+            ToggleWordWrap(hwnd);
             break;
         default:
             return DefWindowProcW(hwnd, uMsg, wParam, lParam);
         }
         break;
+    }
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
@@ -154,7 +223,13 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
     return NULL;
 }
 
-static int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+static INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
+    HMODULE module = LoadLibraryW(L"msftedit.dll");
+    if (module == NULL) {
+        MessageBoxW(NULL, L"DLL-moduulien lataaminen epäonnistui", L"Virhe", MB_ICONERROR);
+        return 1;
+    }
+
     WNDCLASSW wc = {};
     wc.lpszClassName = L"Muistio";
     wc.hInstance     = hInstance;
@@ -172,5 +247,5 @@ static int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR p
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
-    return (int) msg.wParam;
+    return msg.wParam;
 }
