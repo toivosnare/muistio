@@ -25,13 +25,16 @@
 #define COMMAND_ZOOMIN 13
 #define COMMAND_ZOOMOUT 14
 #define COMMAND_ZOOMRESET 15
+#define COMMAND_STATUSBAR 16
 
 static HWND hWndWrapEdit;
 static HWND hWndNoWrapEdit;
 static HWND hWndStatus;
 static HMENU hFormatMenu;
+static HMENU hShowMenu;
 static BOOL wrap = TRUE;
 static INT zoom = 100;
+static BOOL statusBar = TRUE;
 static CONST INT STATUS_PART_AMOUNT = 5;
 static CONST INT STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100};
 
@@ -125,12 +128,14 @@ static VOID Create(HWND hWnd) {
     AppendMenuW(hFormatMenu, MF_STRING, COMMAND_WORDWRAP, L"Automaattinen rivitys");
     CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_CHECKED);
 
-    HMENU hShowMenu = CreateMenu();
+    hShowMenu = CreateMenu();
     HMENU hZoomMenu = CreatePopupMenu();
     AppendMenuW(hShowMenu, MF_STRING | MF_POPUP, (UINT_PTR) hZoomMenu, L"Zoomaus");
     AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMIN, L"Lähennä\tCtrl++");
     AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMOUT, L"Loitonna\tCtrl+-");
     AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMRESET, L"Palauta oletuszoomaus\tCtrl+0");
+    AppendMenuW(hShowMenu, MF_STRING, COMMAND_STATUSBAR, L"Tilarivi");
+    CheckMenuItem(hShowMenu, COMMAND_STATUSBAR, MF_CHECKED);
 
     HMENU hMenuBar = CreateMenu();
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFileMenu, L"Tiedosto");
@@ -158,23 +163,26 @@ static VOID Create(HWND hWnd) {
 }
 
 static VOID Resize(LONG width, LONG height) {
-    SendMessageW(hWndStatus, WM_SIZE, 0, 0);
-    RECT rect;
-    GetWindowRect(hWndStatus, &rect);
-    CONST LONG statusHeight = rect.bottom - rect.top;
+    if (statusBar) {
+        INT statusPartEdges[STATUS_PART_AMOUNT];
+        INT x = width;
+        for (INT i = STATUS_PART_AMOUNT - 1; i > -1; --i) {
+            statusPartEdges[i] = x;
+            x -= STATUS_PART_WIDTHS[i];
+        }
+        SendMessageW(hWndStatus, SB_SETPARTS, STATUS_PART_AMOUNT, (LPARAM) statusPartEdges);
+        UpdatePosition();
+        UpdateZoom();
+        SendMessageW(hWndStatus, SB_SETTEXTW, 3, (LPARAM) L"Windows (CRLF)");
+        UpdateEncoding();
 
-    INT statusPartEdges[STATUS_PART_AMOUNT];
-    INT x = width;
-    for (INT i = STATUS_PART_AMOUNT - 1; i > -1; --i) {
-        statusPartEdges[i] = x;
-        x -= STATUS_PART_WIDTHS[i];
+        SendMessageW(hWndStatus, WM_SIZE, 0, 0);
+        RECT rect;
+        GetWindowRect(hWndStatus, &rect);
+        CONST LONG statusHeight = rect.bottom - rect.top;
+        height -= statusHeight;
     }
-    SendMessageW(hWndStatus, SB_SETPARTS, STATUS_PART_AMOUNT, (LPARAM) statusPartEdges);
-    UpdatePosition();
-    UpdateZoom();
-    SendMessageW(hWndStatus, SB_SETTEXTW, 3, (LPARAM) L"Windows (CRLF)");
-    UpdateEncoding();
-    MoveWindow(ActiveEdit(), 0, 0, width, height - statusHeight, TRUE);
+    MoveWindow(ActiveEdit(), 0, 0, width, height, TRUE);
 }
 
 static VOID ToggleWordWrap(HWND hWnd) {
@@ -197,10 +205,27 @@ static VOID ToggleWordWrap(HWND hWnd) {
     }
 }
 
-static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+static VOID ToggleStatusBar(HWND hWnd) {
+    UINT state = GetMenuState(hShowMenu, COMMAND_STATUSBAR, MF_BYCOMMAND);
+    if (state == MF_CHECKED) {
+        CheckMenuItem(hShowMenu, COMMAND_STATUSBAR, MF_UNCHECKED);
+        statusBar = FALSE;
+        ShowWindow(hWndStatus, SW_HIDE);
+    } else {
+        CheckMenuItem(hShowMenu, COMMAND_STATUSBAR, MF_CHECKED);
+        statusBar = TRUE;
+        ShowWindow(hWndStatus, SW_SHOW);
+    }
+
+    RECT rect;
+    GetClientRect(hWnd, &rect);
+    Resize(rect.right - rect.left, rect.bottom - rect.top);
+}
+
+static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE:
-        Create(hwnd);
+        Create(hWnd);
         break;
     case WM_SIZE: {
         Resize(LOWORD(lParam), HIWORD(lParam));
@@ -218,13 +243,13 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         case COMMAND_NEW_WINDOW:
             break;
         case COMMAND_OPEN:
-            Open(hwnd);
+            Open(hWnd);
             UpdateEncoding();
             break;
         case COMMAND_SAVE:
             break;
         case COMMAND_SAVE_AS:
-            SaveAs(hwnd);
+            SaveAs(hWnd);
             UpdateEncoding();
             break;
         case COMMAND_QUIT:
@@ -247,7 +272,7 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             SendMessageW(edit, WM_CLEAR, 0, 0);
             break;
         case COMMAND_WORDWRAP:
-            ToggleWordWrap(hwnd);
+            ToggleWordWrap(hWnd);
             break;
         case COMMAND_ZOOMIN:
             Zoom(TRUE);
@@ -259,8 +284,11 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             zoom = 100;
             UpdateZoom();
             break;
+        case COMMAND_STATUSBAR:
+            ToggleStatusBar(hWnd);
+            break;
         default:
-            return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+            return DefWindowProcW(hWnd, uMsg, wParam, lParam);
         }
         break;
     }
@@ -268,7 +296,7 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
         PostQuitMessage(0);
         break;
     default:
-        return DefWindowProcW(hwnd, uMsg, wParam, lParam);
+        return DefWindowProcW(hWnd, uMsg, wParam, lParam);
     }
     return NULL;
 }
