@@ -22,12 +22,16 @@
 #define COMMAND_PASTE 10
 #define COMMAND_DELETE 11
 #define COMMAND_WORDWRAP 12
+#define COMMAND_ZOOMIN 13
+#define COMMAND_ZOOMOUT 14
+#define COMMAND_ZOOMRESET 15
 
 static HWND hWndWrapEdit;
 static HWND hWndNoWrapEdit;
 static HWND hWndStatus;
 static HMENU hFormatMenu;
 static BOOL wrap = TRUE;
+static INT zoom = 100;
 static CONST INT STATUS_PART_AMOUNT = 5;
 static CONST INT STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100};
 
@@ -35,10 +39,55 @@ HWND ActiveEdit() {
     return wrap ? hWndWrapEdit : hWndNoWrapEdit;
 }
 
+static VOID UpdatePosition() {
+    DWORD caret;
+    HWND edit = ActiveEdit();
+    SendMessageW(edit, EM_GETSEL, (WPARAM) &caret, NULL);
+    LONG line = SendMessageW(edit, EM_LINEFROMCHAR, caret, NULL) + 1;
+    LONG start = SendMessageW(edit, EM_LINEINDEX, line - 1, NULL);
+    LONG column = caret - start + 1;
+    CONST INT SIZE = 24;
+    WCHAR text[SIZE];
+    swprintf_s(text, SIZE, L"Rivi %d, Sarake %d", line, column);
+    SendMessageW(hWndStatus, SB_SETTEXTW, 1, (LPARAM) text);
+}
+
+static VOID UpdateZoom() {
+    SendMessageW(hWndWrapEdit, EM_SETZOOM, zoom, 100);
+    SendMessageW(hWndNoWrapEdit, EM_SETZOOM, zoom, 100);
+    CONST INT SIZE = 5;
+    WCHAR text[SIZE];
+    swprintf_s(text, SIZE, L"%d%%", zoom);
+    SendMessageW(hWndStatus, SB_SETTEXTW, 2, (LPARAM) text);
+}
+
+static VOID UpdateEncoding() {
+    SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) GetEncoding());
+}
+
+static VOID Zoom(BOOL up) {
+    if (up && zoom < 500) {
+        zoom += 10;
+    } else if (!up && zoom > 10) {
+        zoom -= 10;
+    } else {
+        return;
+    }
+    UpdateZoom();
+}
+
 static LRESULT CALLBACK EditProc(HWND hWnd, UINT uMsg, WPARAM wParam,
         LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
     if (uIdSubclass == wrap) {
         switch (uMsg) {
+            case WM_MOUSEWHEEL: {
+                CONST SHORT delta = GET_WHEEL_DELTA_WPARAM(wParam);
+                CONST USHORT flags = GET_KEYSTATE_WPARAM(wParam);
+                if (flags & MK_CONTROL) {
+                    Zoom(delta > 0);
+                    return 0;
+                }
+            }
             case WM_SETCURSOR:
             case WM_KEYDOWN:
             case WM_KEYUP:
@@ -76,19 +125,27 @@ static VOID Create(HWND hWnd) {
     AppendMenuW(hFormatMenu, MF_STRING, COMMAND_WORDWRAP, L"Automaattinen rivitys");
     CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_CHECKED);
 
+    HMENU hShowMenu = CreateMenu();
+    HMENU hZoomMenu = CreatePopupMenu();
+    AppendMenuW(hShowMenu, MF_STRING | MF_POPUP, (UINT_PTR) hZoomMenu, L"Zoomaus");
+    AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMIN, L"Lähennä\tCtrl++");
+    AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMOUT, L"Loitonna\tCtrl+-");
+    AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMRESET, L"Palauta oletuszoomaus\tCtrl+0");
+
     HMENU hMenuBar = CreateMenu();
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFileMenu, L"Tiedosto");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hEditMenu, L"Muokkaa");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFormatMenu, L"Muotoile");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hShowMenu, L"Näytä");
     SetMenu(hWnd, hMenuBar);
 
     hWndWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
-            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE,
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_EX_ZOOMABLE,
             0, 0, 0, 0, hWnd, (HMENU) ID_EDIT,
             NULL, NULL);
     SetWindowSubclass(hWndWrapEdit, EditProc, TRUE, NULL);
     hWndNoWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
-            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | WS_HSCROLL,
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | WS_HSCROLL | ES_EX_ZOOMABLE,
             0, 0, 0, 0, hWnd, (HMENU) ID_EDIT,
             NULL, NULL);
     SetWindowSubclass(hWndNoWrapEdit, EditProc, FALSE, NULL);
@@ -98,23 +155,6 @@ static VOID Create(HWND hWnd) {
             WS_CHILD | WS_VISIBLE,
             0, 0, 0, 0, hWnd, (HMENU) ID_STATUS,
             NULL, NULL);
-}
-
-static VOID UpdateEncoding() {
-    SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) GetEncoding());
-}
-
-static VOID UpdatePosition() {
-    DWORD caret;
-    HWND edit = ActiveEdit();
-    SendMessageW(edit, EM_GETSEL, (WPARAM) &caret, NULL);
-    LONG line = SendMessageW(edit, EM_LINEFROMCHAR, caret, NULL) + 1;
-    LONG start = SendMessageW(edit, EM_LINEINDEX, line - 1, NULL);
-    LONG column = caret - start + 1;
-    CONST INT SIZE = 24;
-    WCHAR text[SIZE];
-    swprintf_s(text, SIZE, L"Rivi %d, Sarake %d", line, column);
-    SendMessageW(hWndStatus, SB_SETTEXTW, 1, (LPARAM) text);
 }
 
 static VOID Resize(LONG width, LONG height) {
@@ -131,7 +171,7 @@ static VOID Resize(LONG width, LONG height) {
     }
     SendMessageW(hWndStatus, SB_SETPARTS, STATUS_PART_AMOUNT, (LPARAM) statusPartEdges);
     UpdatePosition();
-    SendMessageW(hWndStatus, SB_SETTEXTW, 2, (LPARAM) L"100%");
+    UpdateZoom();
     SendMessageW(hWndStatus, SB_SETTEXTW, 3, (LPARAM) L"Windows (CRLF)");
     UpdateEncoding();
     MoveWindow(ActiveEdit(), 0, 0, width, height - statusHeight, TRUE);
@@ -208,6 +248,16 @@ static LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_WORDWRAP:
             ToggleWordWrap(hwnd);
+            break;
+        case COMMAND_ZOOMIN:
+            Zoom(TRUE);
+            break;
+        case COMMAND_ZOOMOUT:
+            Zoom(FALSE);
+            break;
+        case COMMAND_ZOOMRESET:
+            zoom = 100;
+            UpdateZoom();
             break;
         default:
             return DefWindowProcW(hwnd, uMsg, wParam, lParam);
