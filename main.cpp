@@ -24,6 +24,7 @@
 #define COMMAND_PASTE 10
 #define COMMAND_DELETE 11
 #define COMMAND_BINGSEARCH 12
+#define COMMAND_SELECTALL 17
 
 #define COMMAND_WORDWRAP 19
 
@@ -130,6 +131,8 @@ static VOID Create(HWND hWnd) {
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_DELETE, L"Poista\tDel");
     AppendMenuW(hEditMenu, MF_SEPARATOR, NULL, NULL);
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_BINGSEARCH, L"Bing-haku...\tCtrl+E");
+    AppendMenuW(hEditMenu, MF_SEPARATOR, NULL, NULL);
+    AppendMenuW(hEditMenu, MF_STRING, COMMAND_SELECTALL, L"Valitse kaikki\tCtrl+A");
 
     hFormatMenu = CreateMenu();
     AppendMenuW(hFormatMenu, MF_STRING, COMMAND_WORDWRAP, L"Automaattinen rivitys");
@@ -152,12 +155,12 @@ static VOID Create(HWND hWnd) {
     SetMenu(hWnd, hMenuBar);
 
     hWndWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
-            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_EX_ZOOMABLE,
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_EX_ZOOMABLE | ES_NOHIDESEL,
             0, 0, 0, 0, hWnd, (HMENU) ID_EDIT,
             NULL, NULL);
     SetWindowSubclass(hWndWrapEdit, EditProc, TRUE, NULL);
     hWndNoWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
-            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | WS_HSCROLL | ES_EX_ZOOMABLE,
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | WS_HSCROLL | ES_EX_ZOOMABLE | ES_NOHIDESEL,
             0, 0, 0, 0, hWnd, (HMENU) ID_EDIT,
             NULL, NULL);
     SetWindowSubclass(hWndNoWrapEdit, EditProc, FALSE, NULL);
@@ -298,6 +301,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_BINGSEARCH:
             BingSearch(hWnd);
+            break;
+        case COMMAND_SELECTALL:
+            SendMessageW(edit, EM_SETSEL, 0, -1);
             break;
         case COMMAND_WORDWRAP:
             ToggleWordWrap(hWnd);
