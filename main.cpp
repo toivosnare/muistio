@@ -5,6 +5,7 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <Richedit.h>
+#include <shellapi.h>
 
 #define ID_EDIT 1
 #define ID_STATUS 2
@@ -16,16 +17,20 @@
 #define COMMAND_SAVE 4
 #define COMMAND_SAVE_AS 5
 #define COMMAND_QUIT 6
+
 #define COMMAND_UNDO 7
 #define COMMAND_CUT 8
 #define COMMAND_COPY 9
 #define COMMAND_PASTE 10
 #define COMMAND_DELETE 11
-#define COMMAND_WORDWRAP 12
-#define COMMAND_ZOOMIN 13
-#define COMMAND_ZOOMOUT 14
-#define COMMAND_ZOOMRESET 15
-#define COMMAND_STATUSBAR 16
+#define COMMAND_BINGSEARCH 12
+
+#define COMMAND_WORDWRAP 19
+
+#define COMMAND_ZOOMIN 21
+#define COMMAND_ZOOMOUT 22
+#define COMMAND_ZOOMRESET 23
+#define COMMAND_STATUSBAR 24
 
 static HWND hWndWrapEdit;
 static HWND hWndNoWrapEdit;
@@ -123,6 +128,8 @@ static VOID Create(HWND hWnd) {
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_COPY, L"Kopioi\tCtrl+C");
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_PASTE, L"Liitä\tCtrl+V");
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_DELETE, L"Poista\tDel");
+    AppendMenuW(hEditMenu, MF_SEPARATOR, NULL, NULL);
+    AppendMenuW(hEditMenu, MF_STRING, COMMAND_BINGSEARCH, L"Bing-haku...\tCtrl+E");
 
     hFormatMenu = CreateMenu();
     AppendMenuW(hFormatMenu, MF_STRING, COMMAND_WORDWRAP, L"Automaattinen rivitys");
@@ -222,6 +229,24 @@ static VOID ToggleStatusBar(HWND hWnd) {
     Resize(rect.right - rect.left, rect.bottom - rect.top);
 }
 
+static VOID BingSearch(HWND hWnd) {
+    HWND edit = ActiveEdit();
+    DWORD start, end;
+    SendMessageW(edit, EM_GETSEL, (WPARAM) &start, (LPARAM) &end);
+    CONST DWORD selectionSize = end - start;
+    if (selectionSize == 0)
+        return;
+    LPCWSTR selection = new WCHAR[selectionSize + 1];
+    SendMessageW(edit, EM_GETSELTEXT, NULL, (LPARAM) selection);
+    
+    CONST DWORD urlSize = selectionSize + 31;
+    LPWSTR url = new WCHAR[urlSize];
+    swprintf_s(url, urlSize, L"https://www.bing.com/search?q=%s", selection);
+    ShellExecuteW(hWnd, L"open", url, NULL, NULL, SW_SHOWNORMAL);
+    delete[] selection;
+    delete[] url;
+}
+
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE:
@@ -270,6 +295,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_DELETE:
             SendMessageW(edit, WM_CLEAR, 0, 0);
+            break;
+        case COMMAND_BINGSEARCH:
+            BingSearch(hWnd);
             break;
         case COMMAND_WORDWRAP:
             ToggleWordWrap(hWnd);
