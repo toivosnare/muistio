@@ -6,6 +6,7 @@
 #include <commctrl.h>
 #include <Richedit.h>
 #include <shellapi.h>
+#include <datetimeapi.h>
 
 #define ID_EDIT 1
 #define ID_STATUS 2
@@ -25,6 +26,7 @@
 #define COMMAND_DELETE 11
 #define COMMAND_BINGSEARCH 12
 #define COMMAND_SELECTALL 17
+#define COMMAND_DATETIME 18
 
 #define COMMAND_WORDWRAP 19
 
@@ -97,6 +99,7 @@ static LRESULT CALLBACK EditProc(HWND hWnd, UINT uMsg, WPARAM wParam,
                     return 0;
                 }
             }
+            case EM_REPLACESEL:
             case WM_SETCURSOR:
             case WM_KEYDOWN:
             case WM_KEYUP:
@@ -133,6 +136,7 @@ static VOID Create(HWND hWnd) {
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_BINGSEARCH, L"Bing-haku...\tCtrl+E");
     AppendMenuW(hEditMenu, MF_SEPARATOR, NULL, NULL);
     AppendMenuW(hEditMenu, MF_STRING, COMMAND_SELECTALL, L"Valitse kaikki\tCtrl+A");
+    AppendMenuW(hEditMenu, MF_STRING, COMMAND_DATETIME, L"Aika ja päivämäärä\tF5");
 
     hFormatMenu = CreateMenu();
     AppendMenuW(hFormatMenu, MF_STRING, COMMAND_WORDWRAP, L"Automaattinen rivitys");
@@ -250,6 +254,15 @@ static VOID BingSearch(HWND hWnd) {
     delete[] url;
 }
 
+static VOID DateTime() {
+    SYSTEMTIME t;
+    GetLocalTime(&t);
+    CONST INT SIZE = 17;
+    WCHAR time[SIZE];
+    swprintf_s(time, SIZE, L"%u.%u %u.%u.%u", t.wHour, t.wMinute, t.wDay, t.wMonth, t.wYear);
+    SendMessageW(ActiveEdit(), EM_REPLACESEL, TRUE, (LPARAM) time);
+}
+
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE:
@@ -304,6 +317,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_SELECTALL:
             SendMessageW(edit, EM_SETSEL, 0, -1);
+            break;
+        case COMMAND_DATETIME:
+            DateTime();
             break;
         case COMMAND_WORDWRAP:
             ToggleWordWrap(hWnd);
