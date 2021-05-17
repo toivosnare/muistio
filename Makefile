@@ -18,18 +18,18 @@ CXX = $(VS)\bin\Hostx86\x86\cl.exe
 RC = $(SDK_BIN)\x86\rc.exe
 LD = $(VS)\bin\Hostx86\x86\link.exe
 
-CXXFLAGS = /c /std:c++17 /nologo
-RCFLAGS = /nologo
-LDFLAGS = /nologo
+CXXFLAGS = /c /std:c++17 /nologo /utf-8 /I $(INC_VS) /I $(INC_SDK_SH) /I $(INC_SDK_UM) /I $(INC_SDK_UC)
+RCFLAGS = /nologo /I $(INC_SDK_SH) /I $(INC_SDK_UM)
+LDFLAGS = /nologo /LIBPATH:$(LIB_VS) /LIBPATH:$(LIB_SDK_UM) /LIBPATH:$(LIB_SDK_UC)
 
 LIBS = user32.lib Comdlg32.lib Comctl32.lib
 OBJS = main.obj fileio.obj encoding.res
 
 all: $(OBJS)
-	$(LD) $(LDFLAGS) /LIBPATH:$(LIB_VS) /LIBPATH:$(LIB_SDK_UM) /LIBPATH:$(LIB_SDK_UC) $(OBJS) $(LIBS)
+	$(LD) $(LDFLAGS) $(OBJS) $(LIBS)
 
 %.obj: %.cpp
-	$(CXX) $(CXXFLAGS) /I $(INC_VS) /I $(INC_SDK_SH) /I $(INC_SDK_UM) /I $(INC_SDK_UC) $<
+	$(CXX) $(CXXFLAGS) $<
 
 %.res: %.rc
-	$(RC) $(RCFLAGS) /I $(INC_SDK_SH) /I $(INC_SDK_UM) $<
+	$(RC) $(RCFLAGS) $<
