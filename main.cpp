@@ -35,6 +35,9 @@
 #define COMMAND_ZOOMRESET 23
 #define COMMAND_STATUSBAR 24
 
+#define COMMAND_HELP 25
+#define COMMAND_FEEDBACK 26
+
 static HWND hWndWrapEdit;
 static HWND hWndNoWrapEdit;
 static HWND hWndStatus;
@@ -151,11 +154,16 @@ static VOID Create(HWND hWnd) {
     AppendMenuW(hShowMenu, MF_STRING, COMMAND_STATUSBAR, L"Tilarivi");
     CheckMenuItem(hShowMenu, COMMAND_STATUSBAR, MF_CHECKED);
 
+    HMENU hHelpMenu = CreateMenu();
+    AppendMenuW(hHelpMenu, MF_STRING, COMMAND_HELP, L"Näytä ohje");
+    AppendMenuW(hHelpMenu, MF_STRING, COMMAND_FEEDBACK, L"Lähetä palautetta");
+
     HMENU hMenuBar = CreateMenu();
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFileMenu, L"Tiedosto");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hEditMenu, L"Muokkaa");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFormatMenu, L"Muotoile");
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hShowMenu, L"Näytä");
+    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hHelpMenu, L"Ohje");
     SetMenu(hWnd, hMenuBar);
 
     hWndWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
@@ -336,6 +344,12 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_STATUSBAR:
             ToggleStatusBar(hWnd);
+            break;
+        case COMMAND_HELP:
+            ShellExecuteW(hWnd, L"open", L"https://github.com/toivosnare/muistio", NULL, NULL, SW_SHOWNORMAL);
+            break;
+        case COMMAND_FEEDBACK:
+            ShellExecuteW(hWnd, L"open", L"https://github.com/toivosnare/muistio/issues/new", NULL, NULL, SW_SHOWNORMAL);
             break;
         default:
             return DefWindowProcW(hWnd, uMsg, wParam, lParam);
