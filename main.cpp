@@ -12,34 +12,6 @@
 #define ID_EDIT 1
 #define ID_STATUS 2
 
-// Commands IDs
-#define COMMAND_NEW 1
-#define COMMAND_NEW_WINDOW 2
-#define COMMAND_OPEN 3
-#define COMMAND_SAVE 4
-#define COMMAND_SAVE_AS 5
-#define COMMAND_QUIT 6
-
-#define COMMAND_UNDO 7
-#define COMMAND_CUT 8
-#define COMMAND_COPY 9
-#define COMMAND_PASTE 10
-#define COMMAND_DELETE 11
-#define COMMAND_BINGSEARCH 12
-#define COMMAND_SELECTALL 17
-#define COMMAND_DATETIME 18
-
-#define COMMAND_WORDWRAP 19
-
-#define COMMAND_ZOOMIN 21
-#define COMMAND_ZOOMOUT 22
-#define COMMAND_ZOOMRESET 23
-#define COMMAND_STATUSBAR 24
-
-#define COMMAND_HELP 25
-#define COMMAND_FEEDBACK 26
-#define COMMAND_ABOUT 27
-
 static HWND hWndWrapEdit;
 static HWND hWndNoWrapEdit;
 static HWND hWndStatus;
@@ -123,10 +95,10 @@ static LRESULT CALLBACK EditProc(HWND hWnd, UINT uMsg, WPARAM wParam,
 static VOID Create(HWND hWnd) {
     HMENU hFileMenu = CreateMenu();
     AppendMenuW(hFileMenu, MF_STRING, COMMAND_NEW, L"Uusi\tCtrl+N");
-    AppendMenuW(hFileMenu, MF_STRING, COMMAND_NEW_WINDOW, L"Uusi ikkuna\tCtrl+Vaihto+N");
+    AppendMenuW(hFileMenu, MF_STRING, COMMAND_NEWWINDOW, L"Uusi ikkuna\tCtrl+Vaihto+N");
     AppendMenuW(hFileMenu, MF_STRING, COMMAND_OPEN, L"Avaa...\tCtrl+O");
     AppendMenuW(hFileMenu, MF_STRING, COMMAND_SAVE, L"Tallenna\tCtrl+S");
-    AppendMenuW(hFileMenu, MF_STRING, COMMAND_SAVE_AS, L"Tallenna nimellä...\tCtrl+Vaihto+S");
+    AppendMenuW(hFileMenu, MF_STRING, COMMAND_SAVEAS, L"Tallenna nimellä...\tCtrl+Vaihto+S");
     AppendMenuW(hFileMenu, MF_SEPARATOR, NULL, NULL);
     AppendMenuW(hFileMenu, MF_STRING, COMMAND_QUIT, L"Lopeta");
 
@@ -303,10 +275,10 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         }
         HWND edit = ActiveEdit();
-        switch (wParam) {
+        switch (LOWORD(wParam)) {
         case COMMAND_NEW:
             break;
-        case COMMAND_NEW_WINDOW:
+        case COMMAND_NEWWINDOW:
             break;
         case COMMAND_OPEN:
             Open(hWnd);
@@ -314,7 +286,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_SAVE:
             break;
-        case COMMAND_SAVE_AS:
+        case COMMAND_SAVEAS:
             SaveAs(hWnd);
             UpdateEncoding();
             break;
@@ -391,6 +363,7 @@ static INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR p
         MessageBoxW(NULL, L"DLL-moduulien lataaminen epäonnistui", L"Virhe", MB_ICONERROR);
         return 1;
     }
+    HACCEL hAccel = LoadAcceleratorsW(hInstance, MAKEINTRESOURCEW(IDI_ACCEL));
 
     WNDCLASSW wc = {};
     wc.lpszClassName = L"Muistio";
@@ -400,14 +373,16 @@ static INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR p
     wc.hCursor       = LoadCursor(0, IDC_ARROW);
     RegisterClassW(&wc);
 
-    CreateWindowW(wc.lpszClassName, L"Muistio",
+    HWND hWnd = CreateWindowW(wc.lpszClassName, L"Muistio",
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             220, 220, 640, 480, 0, 0, hInstance, 0);
 
     MSG msg = {};
     while (GetMessageW(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessageW(&msg);
+        if (!TranslateAcceleratorW(hWnd, hAccel, &msg)) {
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
     }
     return msg.wParam;
 }
