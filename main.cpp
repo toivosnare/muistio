@@ -1,4 +1,5 @@
 #include "fileio.h"
+#include "resource.h"
 
 #include <cstdio>
 
@@ -37,6 +38,7 @@
 
 #define COMMAND_HELP 25
 #define COMMAND_FEEDBACK 26
+#define COMMAND_ABOUT 27
 
 static HWND hWndWrapEdit;
 static HWND hWndNoWrapEdit;
@@ -157,6 +159,8 @@ static VOID Create(HWND hWnd) {
     HMENU hHelpMenu = CreateMenu();
     AppendMenuW(hHelpMenu, MF_STRING, COMMAND_HELP, L"Näytä ohje");
     AppendMenuW(hHelpMenu, MF_STRING, COMMAND_FEEDBACK, L"Lähetä palautetta");
+    AppendMenuW(hHelpMenu, MF_SEPARATOR, NULL, NULL);
+    AppendMenuW(hHelpMenu, MF_STRING, COMMAND_ABOUT, L"Tietoja muistiosta");
 
     HMENU hMenuBar = CreateMenu();
     AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFileMenu, L"Tiedosto");
@@ -271,6 +275,19 @@ static VOID DateTime() {
     SendMessageW(ActiveEdit(), EM_REPLACESEL, TRUE, (LPARAM) time);
 }
 
+static INT_PTR CALLBACK AboutProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg)
+    {
+        case WM_COMMAND:
+            if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
+                EndDialog(hWnd, LOWORD(wParam));
+                return TRUE;
+            }
+            break;
+    }
+    return FALSE;
+}
+
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE:
@@ -350,6 +367,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_FEEDBACK:
             ShellExecuteW(hWnd, L"open", L"https://github.com/toivosnare/muistio/issues/new", NULL, NULL, SW_SHOWNORMAL);
+            break;
+        case COMMAND_ABOUT:
+            DialogBoxW(NULL, MAKEINTRESOURCEW(IDI_ABOUT_DIALOG), hWnd, AboutProc);
             break;
         default:
             return DefWindowProcW(hWnd, uMsg, wParam, lParam);
