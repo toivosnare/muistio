@@ -281,17 +281,16 @@ static VOID SelectFont(HWND hWnd) {
     }
 }
 
-static INT_PTR CALLBACK AboutProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg)
-    {
-        case WM_COMMAND:
-            if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL) {
-                EndDialog(hWnd, LOWORD(wParam));
-                return TRUE;
-            }
-            break;
-    }
-    return FALSE;
+static VOID About(HWND hWnd) {
+    MSGBOXPARAMSW params{};
+    params.cbSize = sizeof(params);
+    params.hwndOwner = hWnd;
+    params.hInstance = GetModuleHandleW(NULL);
+    params.lpszText = L"Muistio (kurja versio)\nTS 2021";
+    params.lpszCaption = L"Tietoja: Muistio";
+    params.dwStyle = MB_USERICON;
+    params.lpszIcon = MAKEINTRESOURCEW(IDI_ICON);
+    MessageBoxIndirectW(&params);
 }
 
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -378,7 +377,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             ShellExecuteW(hWnd, L"open", L"https://github.com/toivosnare/muistio/issues/new", NULL, NULL, SW_SHOWNORMAL);
             break;
         case COMMAND_ABOUT:
-            DialogBoxW(NULL, MAKEINTRESOURCEW(IDI_ABOUT_DIALOG), hWnd, AboutProc);
+            About(hWnd);
             break;
         default:
             return DefWindowProcW(hWnd, uMsg, wParam, lParam);
@@ -402,12 +401,13 @@ static INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR p
     }
     HACCEL hAccel = LoadAcceleratorsW(hInstance, MAKEINTRESOURCEW(IDI_ACCEL));
 
-    WNDCLASSW wc = {};
-    wc.lpszClassName = L"Muistio";
-    wc.hInstance     = hInstance;
-    wc.lpfnWndProc   = WindowProc;
+    WNDCLASSW wc{};
+    wc.lpfnWndProc = WindowProc;
+    wc.hInstance = hInstance;
+    wc.hIcon = LoadIconW(hInstance, MAKEINTRESOURCEW(IDI_ICON));
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = GetSysColorBrush(COLOR_3DFACE);
-    wc.hCursor       = LoadCursor(0, IDC_ARROW);
+    wc.lpszClassName = L"Muistio";
     RegisterClassW(&wc);
 
     HWND hWnd = CreateWindowW(wc.lpszClassName, L"Muistio",
