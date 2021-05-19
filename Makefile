@@ -22,7 +22,7 @@ CXXFLAGS = /c /std:c++17 /nologo /utf-8 /I $(INC_VS) /I $(INC_SDK_SH) /I $(INC_S
 RCFLAGS = /nologo /I $(INC_SDK_SH) /I $(INC_SDK_UM)
 LDFLAGS = /nologo /LIBPATH:$(LIB_VS) /LIBPATH:$(LIB_SDK_UM) /LIBPATH:$(LIB_SDK_UC)
 
-LIBS = user32.lib Comdlg32.lib Comctl32.lib Shell32.lib
+LIBS = user32.lib Comdlg32.lib Comctl32.lib Shell32.lib Gdi32.lib
 OBJS = main.obj fileio.obj resource.res
 
 all: $(OBJS)

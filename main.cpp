@@ -117,6 +117,7 @@ static VOID Create(HWND hWnd) {
 
     hFormatMenu = CreateMenu();
     AppendMenuW(hFormatMenu, MF_STRING, COMMAND_WORDWRAP, L"Automaattinen rivitys");
+    AppendMenuW(hFormatMenu, MF_STRING, COMMAND_SELECTFONT, L"Fontti...");
     CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_CHECKED);
 
     hShowMenu = CreateMenu();
@@ -247,6 +248,39 @@ static VOID DateTime() {
     SendMessageW(ActiveEdit(), EM_REPLACESEL, TRUE, (LPARAM) time);
 }
 
+static VOID SelectFont(HWND hWnd) {
+    CHARFORMATW format{};
+    format.cbSize = sizeof(format);
+    SendMessageW(ActiveEdit(), EM_GETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
+    LOGFONTW font{};
+    CONST INT PIXELS_PER_INCH = GetDeviceCaps(GetDC(hWnd), LOGPIXELSY);
+    CONST INT TWIPS_TO_INCH_RATIO = 72 * 20;
+    font.lfHeight = -MulDiv(format.yHeight, PIXELS_PER_INCH, TWIPS_TO_INCH_RATIO);
+    font.lfWeight = (format.dwEffects & CFM_BOLD) ? FW_BOLD : FW_NORMAL;
+    font.lfItalic = (format.dwEffects & CFM_ITALIC) ? TRUE : FALSE;
+    font.lfCharSet = format.bCharSet;
+    font.lfPitchAndFamily = format.bPitchAndFamily;
+    wcscpy_s(font.lfFaceName, LF_FACESIZE, format.szFaceName);
+
+    CHOOSEFONTW cf{};
+    cf.lStructSize = sizeof(cf);
+    cf.hwndOwner = hWnd;
+    cf.lpLogFont = &font;
+    cf.Flags = CF_FORCEFONTEXIST | CF_INITTOLOGFONTSTRUCT;
+
+    if (ChooseFontW(&cf) == TRUE) {
+        format.dwMask = CFM_BOLD | CFM_CHARSET | CFM_FACE | CFM_ITALIC | CFM_SIZE;
+        format.dwEffects = 0;
+        if (font.lfWeight >= FW_BOLD) format.dwEffects |= CFE_BOLD;
+        if (font.lfItalic) format.dwEffects |= CFE_ITALIC;
+        format.yHeight = MulDiv(-font.lfHeight, TWIPS_TO_INCH_RATIO, PIXELS_PER_INCH);
+        format.bCharSet = font.lfCharSet;
+        format.bPitchAndFamily = font.lfPitchAndFamily;
+        wcscpy_s(format.szFaceName, LF_FACESIZE, font.lfFaceName);
+        SendMessageW(ActiveEdit(), EM_SETCHARFORMAT, SCF_ALL, (LPARAM) &format);
+    }
+}
+
 static INT_PTR CALLBACK AboutProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg)
     {
@@ -320,6 +354,9 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             break;
         case COMMAND_WORDWRAP:
             ToggleWordWrap(hWnd);
+            break;
+        case COMMAND_SELECTFONT:
+            SelectFont(hWnd);
             break;
         case COMMAND_ZOOMIN:
             Zoom(TRUE);
