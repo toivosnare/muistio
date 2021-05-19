@@ -53,6 +53,13 @@ static VOID UpdateEncoding() {
     SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) GetEncoding());
 }
 
+static VOID NewWindow() {
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi;
+    CreateProcessW(NULL, GetCommandLineW(), NULL, NULL, FALSE, NULL, NULL, NULL, &si, &pi);
+}
+
 static VOID Zoom(BOOL up) {
     if (up && zoom < 500) {
         zoom += 10;
@@ -312,6 +319,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         case COMMAND_NEW:
             break;
         case COMMAND_NEWWINDOW:
+            NewWindow();
             break;
         case COMMAND_OPEN:
             Open(hWnd);
