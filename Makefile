@@ -33,3 +33,6 @@ all: $(OBJS)
 
 %.res: %.rc
 	$(RC) $(RCFLAGS) $<
+
+clean:
+	del *.obj *.res *.exe
