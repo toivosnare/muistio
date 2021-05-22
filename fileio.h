@@ -1,5 +1,11 @@
 #include <windows.h>
 
-void Open(HWND);
-void SaveAs(HWND);
-LPCWSTR GetEncoding();
+enum ENCODING {
+    AUTODETECT,
+    ANSI,
+    UTF8,
+    UTF16LE
+};
+
+BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding);
+BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding);

@@ -1,17 +1,22 @@
 #include "fileio.h"
 #include "resource.h"
-
 #include <cstdio>
-
+#include <unordered_map>
 #include <windows.h>
 #include <commctrl.h>
 #include <Richedit.h>
 #include <shellapi.h>
 #include <datetimeapi.h>
 
-#define ID_EDIT 1
-#define ID_STATUS 2
-
+static CONST std::unordered_map<ENCODING, LPCWSTR> ENCODING_CAPTIONS = {
+    {AUTODETECT, L"Tunnista koodaus automaattisesti"},
+    {ANSI, L"ANSI"},
+    {UTF8, L"UTF-8"},
+    {UTF16LE, L"UTF-16 LE"},
+};
+static ENCODING encoding = UTF8;
+static LPCWSTR FILTERS = L"Kaikki\0*.*\0Teksti\0*.txt\0";
+static WCHAR openFile[MAX_PATH] = {0};
 static HWND hWndWrapEdit;
 static HWND hWndNoWrapEdit;
 static HWND hWndStatus;
@@ -25,6 +30,90 @@ static CONST INT STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100
 
 HWND ActiveEdit() {
     return wrap ? hWndWrapEdit : hWndNoWrapEdit;
+}
+
+static VOID UpdateTitle(HWND hWnd) {
+    BOOL modified = SendMessageW(ActiveEdit(), EM_GETMODIFY, NULL, NULL);
+    CONST INT SIZE = 100;
+    WCHAR title[SIZE];
+    swprintf_s(title, SIZE, L"%s%s - Muistio", modified ? L"*" : L"", openFile[0] != '\0' ? openFile : L"Nimetön");
+    SetWindowTextW(hWnd, title);
+}
+
+static VOID UpdateEncoding() {
+    LPCWSTR caption = ENCODING_CAPTIONS.at(encoding);
+    SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) caption);
+}
+
+static UINT_PTR CALLBACK SaveAsProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+    case WM_INITDIALOG: {
+        for (INT i = 0; i < 3; ++i) {
+            LPCWSTR caption = ENCODING_CAPTIONS.at((ENCODING) (i + 1));
+            SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_INSERTSTRING, i, (LPARAM) caption);
+        }
+        SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_SETCURSEL, encoding - 1, NULL);
+        return TRUE;
+    }
+    case WM_NOTIFY: {
+        LPOFNOTIFYW notify = (LPOFNOTIFYW) lParam;
+        if (notify->hdr.code == CDN_FILEOK)
+            encoding = (ENCODING) (SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_GETCURSEL, NULL, NULL) + 1);
+        break;
+    }
+    }
+    return FALSE;
+}
+
+static VOID SaveAs(HWND hWnd) {
+    WCHAR szFile[MAX_PATH];
+    szFile[0] = 0;
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hWnd;
+    ofn.hInstance = GetModuleHandleW(NULL);
+    ofn.lpstrFilter = FILTERS;
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY | OFN_ENABLEHOOK | OFN_EXPLORER | OFN_ENABLETEMPLATE;
+    ofn.lpfnHook = (LPOFNHOOKPROC) SaveAsProc;
+    ofn.lpTemplateName = MAKEINTRESOURCEW(IDI_ENCODING_DIALOG);
+
+    if (GetSaveFileNameW(&ofn) == FALSE)
+        return;
+    if (Write(hWnd, ofn.lpstrFile, encoding)) {
+        wcscpy_s(openFile, MAX_PATH, ofn.lpstrFile);
+        SendMessageW(ActiveEdit(), EM_SETMODIFY, FALSE, NULL);
+        UpdateEncoding();
+        UpdateTitle(hWnd);
+    }
+}
+
+static VOID Save(HWND hWnd) {
+    if (openFile[0] == '\0') {
+        SaveAs(hWnd);
+        return;
+    }
+    if (Write(hWnd, openFile, encoding)) {
+        SendMessageW(ActiveEdit(), EM_SETMODIFY, FALSE, NULL);
+        UpdateTitle(hWnd);
+    }
+}
+
+static BOOL SaveUnsavedChanges(HWND hWnd) {
+    BOOL modified = SendMessageW(ActiveEdit(), EM_GETMODIFY, NULL, NULL);
+    if (modified) {
+        CONST INT SIZE = 100;
+        WCHAR text[SIZE];
+        swprintf_s(text, SIZE, L"Haluatko tallentaa kohteeseen %s tehdyt muutokset?", openFile[0] != '\0' ? openFile : L"Nimetön");
+        INT result = MessageBoxW(hWnd, text, L"Muistio", MB_YESNOCANCEL);
+        if (result == IDCANCEL)
+            return FALSE;
+        else if (result == IDYES)
+            Save(hWnd);
+    }
+    return TRUE;
 }
 
 static VOID UpdatePosition() {
@@ -49,8 +138,12 @@ static VOID UpdateZoom() {
     SendMessageW(hWndStatus, SB_SETTEXTW, 2, (LPARAM) text);
 }
 
-static VOID UpdateEncoding() {
-    SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) GetEncoding());
+static VOID New(HWND hWnd) {
+    if (!SaveUnsavedChanges(hWnd))
+        return;
+    openFile[0] = '\0';
+    SetWindowTextW(ActiveEdit(), L"");
+    UpdateTitle(hWnd);
 }
 
 static VOID NewWindow() {
@@ -58,6 +151,51 @@ static VOID NewWindow() {
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi;
     CreateProcessW(NULL, GetCommandLineW(), NULL, NULL, FALSE, NULL, NULL, NULL, &si, &pi);
+}
+
+static UINT_PTR CALLBACK OpenProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+    case WM_INITDIALOG: {
+        for (CONST auto [id, caption] : ENCODING_CAPTIONS)
+            SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_INSERTSTRING, id, (LPARAM) caption);
+        SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_SETCURSEL, 0, NULL);
+        return TRUE;
+    }
+    case WM_NOTIFY: {
+        LPOFNOTIFYW notify = (LPOFNOTIFYW) lParam;
+        if (notify->hdr.code == CDN_FILEOK)
+            encoding = (ENCODING) SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_GETCURSEL, NULL, NULL);
+        break;
+    }
+    }
+    return FALSE;
+}
+
+static VOID Open(HWND hWnd) {
+    if (!SaveUnsavedChanges(hWnd))
+        return;
+
+    WCHAR szFile[MAX_PATH];
+    szFile[0] = 0;
+    OPENFILENAMEW ofn{};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = hWnd;
+    ofn.hInstance = GetModuleHandleW(NULL);
+    ofn.lpstrFilter = FILTERS;
+    ofn.nFilterIndex = 1;
+    ofn.lpstrFile = szFile;
+    ofn.nMaxFile = sizeof(szFile);
+    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_ENABLEHOOK | OFN_EXPLORER | OFN_ENABLETEMPLATE;
+    ofn.lpfnHook = (LPOFNHOOKPROC) OpenProc;
+    ofn.lpTemplateName = MAKEINTRESOURCEW(IDI_ENCODING_DIALOG);
+
+    if (GetOpenFileNameW(&ofn) == FALSE)
+        return;
+    if (Read(hWnd, ofn.lpstrFile, encoding)) {
+        wcscpy_s(openFile, MAX_PATH, ofn.lpstrFile);
+        UpdateEncoding();
+        UpdateTitle(hWnd);
+    }
 }
 
 static VOID Zoom(BOOL up) {
@@ -80,14 +218,16 @@ static LRESULT CALLBACK EditProc(HWND hWnd, UINT uMsg, WPARAM wParam,
                 CONST USHORT flags = GET_KEYSTATE_WPARAM(wParam);
                 if (flags & MK_CONTROL) {
                     Zoom(delta > 0);
-                    return 0;
                 }
+                SendMessageW(wrap ? hWndNoWrapEdit : hWndWrapEdit, uMsg, wParam, lParam);
+                return 0;
             }
+            case WM_CHAR:
+                UpdateTitle(GetParent(hWnd));
             case EM_REPLACESEL:
             case WM_SETCURSOR:
             case WM_KEYDOWN:
             case WM_KEYUP:
-            case WM_CHAR:
             case WM_SYSKEYDOWN:
             case WM_SYSKEYUP:
             case WM_SYSCHAR:
@@ -151,21 +291,22 @@ static VOID Create(HWND hWnd) {
     SetMenu(hWnd, hMenuBar);
 
     hWndWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
-            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_EX_ZOOMABLE | ES_NOHIDESEL,
-            0, 0, 0, 0, hWnd, (HMENU) ID_EDIT,
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_NOHIDESEL,
+            0, 0, 0, 0, hWnd, 0,
             NULL, NULL);
     SetWindowSubclass(hWndWrapEdit, EditProc, TRUE, NULL);
     hWndNoWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
-            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | WS_HSCROLL | ES_EX_ZOOMABLE | ES_NOHIDESEL,
-            0, 0, 0, 0, hWnd, (HMENU) ID_EDIT,
+            WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_LEFT | ES_MULTILINE | ES_NOHIDESEL | WS_HSCROLL,
+            0, 0, 0, 0, hWnd, 0,
             NULL, NULL);
     SetWindowSubclass(hWndNoWrapEdit, EditProc, FALSE, NULL);
     ShowWindow(hWndNoWrapEdit, SW_HIDE);
 
     hWndStatus = CreateWindowW(STATUSCLASSNAMEW, NULL,
             WS_CHILD | WS_VISIBLE,
-            0, 0, 0, 0, hWnd, (HMENU) ID_STATUS,
+            0, 0, 0, 0, hWnd, 0,
             NULL, NULL);
+    UpdateTitle(hWnd);
 }
 
 static VOID Resize(LONG width, LONG height) {
@@ -317,19 +458,19 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         HWND edit = ActiveEdit();
         switch (LOWORD(wParam)) {
         case COMMAND_NEW:
+            New(hWnd);
             break;
         case COMMAND_NEWWINDOW:
             NewWindow();
             break;
         case COMMAND_OPEN:
             Open(hWnd);
-            UpdateEncoding();
             break;
         case COMMAND_SAVE:
+            Save(hWnd);
             break;
         case COMMAND_SAVEAS:
             SaveAs(hWnd);
-            UpdateEncoding();
             break;
         case COMMAND_QUIT:
             PostQuitMessage(0);
