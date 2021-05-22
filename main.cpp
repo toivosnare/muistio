@@ -473,7 +473,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             SaveAs(hWnd);
             break;
         case COMMAND_QUIT:
-            PostQuitMessage(0);
+            SendMessageW(hWnd, WM_CLOSE, NULL, NULL);
             break;
         case COMMAND_UNDO:
             if (SendMessageW(edit, EM_CANUNDO, 0, 0))
@@ -533,6 +533,11 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         }
         break;
     }
+    case WM_CLOSE:
+        if (!SaveUnsavedChanges(hWnd))
+            break;
+        DestroyWindow(hWnd);
+        break;
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
