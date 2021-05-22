@@ -1,123 +1,28 @@
-#include "fileio.h"
+#include "commands.h"
 #include "resource.h"
 #include <cstdio>
-#include <unordered_map>
 #include <windows.h>
-#include <commctrl.h>
 #include <Richedit.h>
-#include <shellapi.h>
-#include <datetimeapi.h>
+#include <commctrl.h>
 
-static CONST std::unordered_map<ENCODING, LPCWSTR> ENCODING_CAPTIONS = {
-    {AUTODETECT, L"Tunnista koodaus automaattisesti"},
-    {ANSI, L"ANSI"},
-    {UTF8, L"UTF-8"},
-    {UTF16LE, L"UTF-16 LE"},
-};
-static ENCODING encoding = UTF8;
-static LPCWSTR FILTERS = L"Kaikki\0*.*\0Teksti\0*.txt\0";
-static WCHAR openFile[MAX_PATH] = {0};
-static HWND hWndWrapEdit;
-static HWND hWndNoWrapEdit;
-static HWND hWndStatus;
-static HMENU hFormatMenu;
-static HMENU hShowMenu;
-static BOOL wrap = TRUE;
-static INT zoom = 100;
-static BOOL statusBar = TRUE;
+HWND hWndWrapEdit;
+HWND hWndNoWrapEdit;
+HWND hWndStatus;
+HMENU hFormatMenu;
+HMENU hShowMenu;
 static CONST INT STATUS_PART_AMOUNT = 5;
 static CONST INT STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100};
 
-HWND ActiveEdit() {
-    return wrap ? hWndWrapEdit : hWndNoWrapEdit;
-}
-
-static VOID UpdateTitle(HWND hWnd) {
+VOID UpdateTitle(HWND hWnd) {
     BOOL modified = SendMessageW(ActiveEdit(), EM_GETMODIFY, NULL, NULL);
     CONST INT SIZE = 100;
     WCHAR title[SIZE];
-    swprintf_s(title, SIZE, L"%s%s - Muistio", modified ? L"*" : L"", openFile[0] != '\0' ? openFile : L"Nimetön");
+    swprintf_s(title, SIZE, L"%s%s - Muistio", modified ? L"*" : L"", GetFileName());
     SetWindowTextW(hWnd, title);
 }
 
-static VOID UpdateEncoding() {
-    LPCWSTR caption = ENCODING_CAPTIONS.at(encoding);
-    SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) caption);
-}
-
-static UINT_PTR CALLBACK SaveAsProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-    case WM_INITDIALOG: {
-        for (INT i = 0; i < 3; ++i) {
-            LPCWSTR caption = ENCODING_CAPTIONS.at((ENCODING) (i + 1));
-            SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_INSERTSTRING, i, (LPARAM) caption);
-        }
-        SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_SETCURSEL, encoding - 1, NULL);
-        return TRUE;
-    }
-    case WM_NOTIFY: {
-        LPOFNOTIFYW notify = (LPOFNOTIFYW) lParam;
-        if (notify->hdr.code == CDN_FILEOK)
-            encoding = (ENCODING) (SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_GETCURSEL, NULL, NULL) + 1);
-        break;
-    }
-    }
-    return FALSE;
-}
-
-static VOID SaveAs(HWND hWnd) {
-    WCHAR szFile[MAX_PATH];
-    szFile[0] = 0;
-    OPENFILENAMEW ofn = {};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hWnd;
-    ofn.hInstance = GetModuleHandleW(NULL);
-    ofn.lpstrFilter = FILTERS;
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFile = szFile;
-    ofn.nMaxFile = sizeof(szFile);
-    ofn.Flags = OFN_OVERWRITEPROMPT | OFN_HIDEREADONLY | OFN_ENABLEHOOK | OFN_EXPLORER | OFN_ENABLETEMPLATE;
-    ofn.lpfnHook = (LPOFNHOOKPROC) SaveAsProc;
-    ofn.lpTemplateName = MAKEINTRESOURCEW(IDI_ENCODING_DIALOG);
-
-    if (GetSaveFileNameW(&ofn) == FALSE)
-        return;
-    if (Write(hWnd, ofn.lpstrFile, encoding)) {
-        wcscpy_s(openFile, MAX_PATH, ofn.lpstrFile);
-        SendMessageW(ActiveEdit(), EM_SETMODIFY, FALSE, NULL);
-        UpdateEncoding();
-        UpdateTitle(hWnd);
-    }
-}
-
-static VOID Save(HWND hWnd) {
-    if (openFile[0] == '\0') {
-        SaveAs(hWnd);
-        return;
-    }
-    if (Write(hWnd, openFile, encoding)) {
-        SendMessageW(ActiveEdit(), EM_SETMODIFY, FALSE, NULL);
-        UpdateTitle(hWnd);
-    }
-}
-
-static BOOL SaveUnsavedChanges(HWND hWnd) {
-    BOOL modified = SendMessageW(ActiveEdit(), EM_GETMODIFY, NULL, NULL);
-    if (modified) {
-        CONST INT SIZE = 100;
-        WCHAR text[SIZE];
-        swprintf_s(text, SIZE, L"Haluatko tallentaa kohteeseen %s tehdyt muutokset?", openFile[0] != '\0' ? openFile : L"Nimetön");
-        INT result = MessageBoxW(hWnd, text, L"Muistio", MB_YESNOCANCEL);
-        if (result == IDCANCEL)
-            return FALSE;
-        else if (result == IDYES)
-            Save(hWnd);
-    }
-    return TRUE;
-}
-
 static VOID UpdatePosition() {
-    DWORD caret;
+    DWORD caret = 0;
     HWND edit = ActiveEdit();
     SendMessageW(edit, EM_GETSEL, (WPARAM) &caret, NULL);
     LONG line = SendMessageW(edit, EM_LINEFROMCHAR, caret, NULL) + 1;
@@ -129,7 +34,8 @@ static VOID UpdatePosition() {
     SendMessageW(hWndStatus, SB_SETTEXTW, 1, (LPARAM) text);
 }
 
-static VOID UpdateZoom() {
+VOID UpdateZoom() {
+    INT zoom = GetZoom();
     SendMessageW(ActiveEdit(), EM_SETZOOM, zoom, 100);
     CONST INT SIZE = 5;
     WCHAR text[SIZE];
@@ -137,75 +43,8 @@ static VOID UpdateZoom() {
     SendMessageW(hWndStatus, SB_SETTEXTW, 2, (LPARAM) text);
 }
 
-static VOID New(HWND hWnd) {
-    if (!SaveUnsavedChanges(hWnd))
-        return;
-    openFile[0] = '\0';
-    SetWindowTextW(ActiveEdit(), L"");
-    UpdateTitle(hWnd);
-}
-
-static VOID NewWindow() {
-    STARTUPINFOW si{};
-    si.cb = sizeof(si);
-    PROCESS_INFORMATION pi;
-    CreateProcessW(NULL, GetCommandLineW(), NULL, NULL, FALSE, NULL, NULL, NULL, &si, &pi);
-}
-
-static UINT_PTR CALLBACK OpenProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-    case WM_INITDIALOG: {
-        for (CONST auto [id, caption] : ENCODING_CAPTIONS)
-            SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_INSERTSTRING, id, (LPARAM) caption);
-        SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_SETCURSEL, 0, NULL);
-        return TRUE;
-    }
-    case WM_NOTIFY: {
-        LPOFNOTIFYW notify = (LPOFNOTIFYW) lParam;
-        if (notify->hdr.code == CDN_FILEOK)
-            encoding = (ENCODING) SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_GETCURSEL, NULL, NULL);
-        break;
-    }
-    }
-    return FALSE;
-}
-
-static VOID Open(HWND hWnd) {
-    if (!SaveUnsavedChanges(hWnd))
-        return;
-
-    WCHAR szFile[MAX_PATH];
-    szFile[0] = 0;
-    OPENFILENAMEW ofn{};
-    ofn.lStructSize = sizeof(ofn);
-    ofn.hwndOwner = hWnd;
-    ofn.hInstance = GetModuleHandleW(NULL);
-    ofn.lpstrFilter = FILTERS;
-    ofn.nFilterIndex = 1;
-    ofn.lpstrFile = szFile;
-    ofn.nMaxFile = sizeof(szFile);
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_HIDEREADONLY | OFN_ENABLEHOOK | OFN_EXPLORER | OFN_ENABLETEMPLATE;
-    ofn.lpfnHook = (LPOFNHOOKPROC) OpenProc;
-    ofn.lpTemplateName = MAKEINTRESOURCEW(IDI_ENCODING_DIALOG);
-
-    if (GetOpenFileNameW(&ofn) == FALSE)
-        return;
-    if (Read(hWnd, ofn.lpstrFile, encoding)) {
-        wcscpy_s(openFile, MAX_PATH, ofn.lpstrFile);
-        UpdateEncoding();
-        UpdateTitle(hWnd);
-    }
-}
-
-static VOID Zoom(BOOL up) {
-    if (up && zoom < 500) {
-        zoom += 10;
-    } else if (!up && zoom > 10) {
-        zoom -= 10;
-    } else {
-        return;
-    }
-    UpdateZoom();
+VOID UpdateEncoding() {
+    SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) GetEncoding());
 }
 
 static LRESULT CALLBACK EditProc(HWND hWnd, UINT uMsg, WPARAM wParam,
@@ -292,8 +131,8 @@ static VOID Create(HWND hWnd) {
     UpdateTitle(hWnd);
 }
 
-static VOID Resize(LONG width, LONG height) {
-    if (statusBar) {
+VOID Resize(LONG width, LONG height) {
+    if (StatusbarActivated()) {
         INT statusPartEdges[STATUS_PART_AMOUNT];
         INT x = width;
         for (INT i = STATUS_PART_AMOUNT - 1; i > -1; --i) {
@@ -315,147 +154,6 @@ static VOID Resize(LONG width, LONG height) {
     MoveWindow(ActiveEdit(), 0, 0, width, height, TRUE);
 }
 
-static VOID ToggleWordWrap(HWND hWnd) {
-    RECT rect;
-    UINT state = GetMenuState(hFormatMenu, COMMAND_WORDWRAP, MF_BYCOMMAND);
-    if (state == MF_CHECKED) {
-        CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_UNCHECKED);
-        wrap = FALSE;
-        GetWindowRect(hWndWrapEdit, &rect);
-        MoveWindow(hWndNoWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
-        int length = GetWindowTextLengthW(hWndWrapEdit) + 1;
-        LPWSTR text = new WCHAR[length];
-        GetWindowTextW(hWndWrapEdit, text, length);
-        SetWindowTextW(hWndNoWrapEdit, text);
-        delete[] text;
-        DWORD d0, d1;
-        SendMessageW(hWndWrapEdit, EM_GETSEL, (WPARAM) &d0, (LPARAM) &d1);
-        SendMessageW(hWndNoWrapEdit, EM_SETSEL, d0, d1);
-        BOOL modified = SendMessageW(hWndWrapEdit, EM_GETMODIFY, NULL, NULL);
-        SendMessageW(hWndNoWrapEdit, EM_SETMODIFY, modified, NULL);
-        SendMessageW(hWndWrapEdit, EM_GETZOOM, (WPARAM) &d0, (LPARAM) &d1);
-        SendMessageW(hWndNoWrapEdit, EM_SETZOOM, d0, d1);
-        CHARFORMATW format;
-        format.cbSize = sizeof(format);
-        SendMessageW(hWndWrapEdit, EM_GETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
-        SendMessageW(hWndNoWrapEdit, EM_SETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
-        ShowWindow(hWndWrapEdit, SW_HIDE);
-        ShowWindow(hWndNoWrapEdit, SW_SHOW);
-    } else {
-        CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_CHECKED);
-        wrap = TRUE;
-        GetWindowRect(hWndNoWrapEdit, &rect);
-        MoveWindow(hWndWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
-        int length = GetWindowTextLengthW(hWndNoWrapEdit) + 1;
-        LPWSTR text = new WCHAR[length];
-        GetWindowTextW(hWndNoWrapEdit, text, length);
-        SetWindowTextW(hWndWrapEdit, text);
-        delete[] text;
-        DWORD d0, d1;
-        SendMessageW(hWndNoWrapEdit, EM_GETSEL, (WPARAM) &d0, (LPARAM) &d1);
-        SendMessageW(hWndWrapEdit, EM_SETSEL, d0, d1);
-        BOOL modified = SendMessageW(hWndNoWrapEdit, EM_GETMODIFY, NULL, NULL);
-        SendMessageW(hWndWrapEdit, EM_SETMODIFY, modified, NULL);
-        SendMessageW(hWndNoWrapEdit, EM_GETZOOM, (WPARAM) &d0, (LPARAM) &d1);
-        SendMessageW(hWndWrapEdit, EM_SETZOOM, d0, d1);
-        CHARFORMATW format;
-        format.cbSize = sizeof(format);
-        SendMessageW(hWndNoWrapEdit, EM_GETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
-        SendMessageW(hWndWrapEdit, EM_SETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
-        ShowWindow(hWndNoWrapEdit, SW_HIDE);
-        ShowWindow(hWndWrapEdit, SW_SHOW);
-    }
-}
-
-static VOID ToggleStatusBar(HWND hWnd) {
-    UINT state = GetMenuState(hShowMenu, COMMAND_STATUSBAR, MF_BYCOMMAND);
-    if (state == MF_CHECKED) {
-        CheckMenuItem(hShowMenu, COMMAND_STATUSBAR, MF_UNCHECKED);
-        statusBar = FALSE;
-        ShowWindow(hWndStatus, SW_HIDE);
-    } else {
-        CheckMenuItem(hShowMenu, COMMAND_STATUSBAR, MF_CHECKED);
-        statusBar = TRUE;
-        ShowWindow(hWndStatus, SW_SHOW);
-    }
-
-    RECT rect;
-    GetClientRect(hWnd, &rect);
-    Resize(rect.right - rect.left, rect.bottom - rect.top);
-}
-
-static VOID BingSearch(HWND hWnd) {
-    HWND edit = ActiveEdit();
-    DWORD start, end;
-    SendMessageW(edit, EM_GETSEL, (WPARAM) &start, (LPARAM) &end);
-    CONST DWORD selectionSize = end - start;
-    if (selectionSize == 0)
-        return;
-    LPCWSTR selection = new WCHAR[selectionSize + 1];
-    SendMessageW(edit, EM_GETSELTEXT, NULL, (LPARAM) selection);
-    
-    CONST DWORD urlSize = selectionSize + 31;
-    LPWSTR url = new WCHAR[urlSize];
-    swprintf_s(url, urlSize, L"https://www.bing.com/search?q=%s", selection);
-    ShellExecuteW(hWnd, L"open", url, NULL, NULL, SW_SHOWNORMAL);
-    delete[] selection;
-    delete[] url;
-}
-
-static VOID DateTime() {
-    SYSTEMTIME t;
-    GetLocalTime(&t);
-    CONST INT SIZE = 17;
-    WCHAR time[SIZE];
-    swprintf_s(time, SIZE, L"%u.%u %u.%u.%u", t.wHour, t.wMinute, t.wDay, t.wMonth, t.wYear);
-    SendMessageW(ActiveEdit(), EM_REPLACESEL, TRUE, (LPARAM) time);
-}
-
-static VOID SelectFont(HWND hWnd) {
-    CHARFORMATW format{};
-    format.cbSize = sizeof(format);
-    SendMessageW(ActiveEdit(), EM_GETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
-    LOGFONTW font{};
-    CONST INT PIXELS_PER_INCH = GetDeviceCaps(GetDC(hWnd), LOGPIXELSY);
-    CONST INT TWIPS_TO_INCH_RATIO = 72 * 20;
-    font.lfHeight = -MulDiv(format.yHeight, PIXELS_PER_INCH, TWIPS_TO_INCH_RATIO);
-    font.lfWeight = (format.dwEffects & CFM_BOLD) ? FW_BOLD : FW_NORMAL;
-    font.lfItalic = (format.dwEffects & CFM_ITALIC) ? TRUE : FALSE;
-    font.lfCharSet = format.bCharSet;
-    font.lfPitchAndFamily = format.bPitchAndFamily;
-    wcscpy_s(font.lfFaceName, LF_FACESIZE, format.szFaceName);
-
-    CHOOSEFONTW cf{};
-    cf.lStructSize = sizeof(cf);
-    cf.hwndOwner = hWnd;
-    cf.lpLogFont = &font;
-    cf.Flags = CF_FORCEFONTEXIST | CF_INITTOLOGFONTSTRUCT;
-
-    if (ChooseFontW(&cf) == TRUE) {
-        format.dwMask = CFM_BOLD | CFM_CHARSET | CFM_FACE | CFM_ITALIC | CFM_SIZE;
-        format.dwEffects = 0;
-        if (font.lfWeight >= FW_BOLD) format.dwEffects |= CFE_BOLD;
-        if (font.lfItalic) format.dwEffects |= CFE_ITALIC;
-        format.yHeight = MulDiv(-font.lfHeight, TWIPS_TO_INCH_RATIO, PIXELS_PER_INCH);
-        format.bCharSet = font.lfCharSet;
-        format.bPitchAndFamily = font.lfPitchAndFamily;
-        wcscpy_s(format.szFaceName, LF_FACESIZE, font.lfFaceName);
-        SendMessageW(ActiveEdit(), EM_SETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
-    }
-}
-
-static VOID About(HWND hWnd) {
-    MSGBOXPARAMSW params{};
-    params.cbSize = sizeof(params);
-    params.hwndOwner = hWnd;
-    params.hInstance = GetModuleHandleW(NULL);
-    params.lpszText = L"Muistio (kurja versio)\nTS 2021";
-    params.lpszCaption = L"Tietoja: Muistio";
-    params.dwStyle = MB_USERICON;
-    params.lpszIcon = MAKEINTRESOURCEW(IDI_ICON);
-    MessageBoxIndirectW(&params);
-}
-
 static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
     switch (uMsg) {
     case WM_CREATE:
@@ -470,7 +168,6 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             UpdatePosition();
             break;
         }
-        HWND edit = ActiveEdit();
         switch (LOWORD(wParam)) {
         case COMMAND_NEW:
             New(hWnd);
@@ -488,29 +185,28 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             SaveAs(hWnd);
             break;
         case COMMAND_QUIT:
-            SendMessageW(hWnd, WM_CLOSE, NULL, NULL);
+            Quit(hWnd);
             break;
         case COMMAND_UNDO:
-            if (SendMessageW(edit, EM_CANUNDO, 0, 0))
-                SendMessageW(edit, WM_UNDO, 0, 0);
+            Undo();
             break;
         case COMMAND_CUT:
-            SendMessageW(edit, WM_CUT, 0, 0);
+            Cut();
             break;
         case COMMAND_COPY:
-            SendMessageW(edit, WM_COPY, 0, 0);
+            Copy();
             break;
         case COMMAND_PASTE:
-            SendMessageW(edit, WM_PASTE, 0, 0);
+            Paste();
             break;
         case COMMAND_DELETE:
-            SendMessageW(edit, WM_CLEAR, 0, 0);
+            Delete();
             break;
         case COMMAND_BINGSEARCH:
             BingSearch(hWnd);
             break;
         case COMMAND_SELECTALL:
-            SendMessageW(edit, EM_SETSEL, 0, -1);
+            SelectAll();
             break;
         case COMMAND_DATETIME:
             DateTime();
@@ -528,17 +224,16 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             Zoom(FALSE);
             break;
         case COMMAND_ZOOMRESET:
-            zoom = 100;
-            UpdateZoom();
+            ResetZoom();
             break;
         case COMMAND_STATUSBAR:
             ToggleStatusBar(hWnd);
             break;
         case COMMAND_HELP:
-            ShellExecuteW(hWnd, L"open", L"https://github.com/toivosnare/muistio", NULL, NULL, SW_SHOWNORMAL);
+            Help(hWnd);
             break;
         case COMMAND_FEEDBACK:
-            ShellExecuteW(hWnd, L"open", L"https://github.com/toivosnare/muistio/issues/new", NULL, NULL, SW_SHOWNORMAL);
+            Feedback(hWnd);
             break;
         case COMMAND_ABOUT:
             About(hWnd);
