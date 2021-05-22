@@ -3,7 +3,7 @@
 extern HWND ActiveEdit();
 
 BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding) {
-    HANDLE hFile = CreateFileW(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    CONST HANDLE hFile = CreateFileW(path, GENERIC_READ, 0, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         MessageBoxW(hWnd, L"Tiedoston avaaminen epäonnistui.", L"Virhe", MB_ICONERROR);
         return FALSE;
@@ -12,7 +12,7 @@ BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding) {
     CONST INT BUFFER_SIZE = 16384;
     CHAR buffer[BUFFER_SIZE];
     DWORD numberOfBytesRead;
-    BOOL result = ReadFile(hFile, buffer, BUFFER_SIZE - 1, &numberOfBytesRead, NULL);
+    CONST BOOL result = ReadFile(hFile, buffer, BUFFER_SIZE - 1, &numberOfBytesRead, NULL);
     CloseHandle(hFile);
     if (result == FALSE) {
         MessageBoxW(hWnd, L"Tiedoston lukeminen epäonnistui.", L"Virhe", MB_ICONERROR);
@@ -20,7 +20,7 @@ BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding) {
     }
     if (numberOfBytesRead == BUFFER_SIZE - 1)
         MessageBoxW(hWnd, L"Tiedoston koko ylittää puskurin koon.", L"Varoitus", MB_ICONWARNING);
-    buffer[numberOfBytesRead] = 0;
+    buffer[numberOfBytesRead] = '\0';
     if (numberOfBytesRead == 0) {
         if (encoding == AUTODETECT) {
             MessageBoxW(hWnd, L"Tyhjän tiedoston koodauksen tunnistus epäonnistui.", L"Varoitus", MB_ICONWARNING);
@@ -48,14 +48,14 @@ BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding) {
             encoding = UTF8;
         }
     }
-    HWND edit = ActiveEdit();
+    CONST HWND edit = ActiveEdit();
     switch (encoding) {
     case ANSI: {
         SetWindowTextA(edit, buffer);
         break;
     }
     case UTF8: {
-        DWORD flags = MB_ERR_INVALID_CHARS;
+        CONST DWORD flags = MB_ERR_INVALID_CHARS;
         CONST INT utf16Length = MultiByteToWideChar(CP_UTF8, flags, buffer, -1, NULL, 0);
         if (utf16Length == 0) {
             MessageBoxW(hWnd, L"Tiedosto sisältää laittomia UTF-8 merkkejä.", L"Varoitus", MB_ICONWARNING);
@@ -68,7 +68,7 @@ BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding) {
         break;
     }
     case UTF16LE: {
-        SetWindowTextW(edit, (LPCWSTR) buffer);
+        SetWindowTextW(edit, reinterpret_cast<LPCWSTR>(buffer));
         break;
     }
     }
@@ -76,20 +76,20 @@ BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding) {
 }
 
 BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding) {
-    HANDLE hFile = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    CONST HANDLE hFile = CreateFileW(path, GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         MessageBoxW(hWnd, L"Tiedoston avaaminen epäonnistui.", L"Virhe", MB_ICONERROR);
         return FALSE;
     }
 
-    HWND edit = ActiveEdit();
+    CONST HWND edit = ActiveEdit();
     switch (encoding) {
     case ANSI: {
         CONST INT length = GetWindowTextLengthA(edit) + 1;
         LPSTR text = new CHAR[length];
         GetWindowTextA(edit, text, length);
         DWORD numberOfBytesWritten;
-        BOOL result = WriteFile(hFile, text, length, &numberOfBytesWritten, NULL);
+        CONST BOOL result = WriteFile(hFile, text, length, &numberOfBytesWritten, NULL);
         delete[] text;
         CloseHandle(hFile);
         if (result == FALSE || numberOfBytesWritten != length) {
@@ -118,7 +118,7 @@ BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding) {
         utf8Text[2] = '\xBF';
         WideCharToMultiByte(CP_UTF8, flags, utf16Text, -1, &utf8Text[3], utf8Length - 3, NULL, NULL);
         DWORD numberOfBytesWritten;
-        BOOL result = WriteFile(hFile, utf8Text, utf8Length, &numberOfBytesWritten, NULL);
+        CONST BOOL result = WriteFile(hFile, utf8Text, utf8Length, &numberOfBytesWritten, NULL);
         delete[] utf16Text;
         delete[] utf8Text;
         CloseHandle(hFile);

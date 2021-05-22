@@ -14,7 +14,7 @@ static CONST INT STATUS_PART_AMOUNT = 5;
 static CONST INT STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100};
 
 VOID UpdateTitle(HWND hWnd) {
-    BOOL modified = SendMessageW(ActiveEdit(), EM_GETMODIFY, NULL, NULL);
+    CONST BOOL modified = SendMessageW(ActiveEdit(), EM_GETMODIFY, NULL, NULL);
     CONST INT SIZE = 100;
     WCHAR title[SIZE];
     swprintf_s(title, SIZE, L"%s%s - Muistio", modified ? L"*" : L"", GetFileName());
@@ -23,28 +23,28 @@ VOID UpdateTitle(HWND hWnd) {
 
 static VOID UpdatePosition() {
     DWORD caret = 0;
-    HWND edit = ActiveEdit();
-    SendMessageW(edit, EM_GETSEL, (WPARAM) &caret, NULL);
-    LONG line = SendMessageW(edit, EM_LINEFROMCHAR, caret, NULL) + 1;
-    LONG start = SendMessageW(edit, EM_LINEINDEX, line - 1, NULL);
-    LONG column = caret - start + 1;
+    CONST HWND edit = ActiveEdit();
+    SendMessageW(edit, EM_GETSEL, reinterpret_cast<WPARAM>(&caret), NULL);
+    CONST LONG line = SendMessageW(edit, EM_LINEFROMCHAR, caret, NULL) + 1;
+    CONST LONG start = SendMessageW(edit, EM_LINEINDEX, line - 1, NULL);
+    CONST LONG column = caret - start + 1;
     CONST INT SIZE = 24;
     WCHAR text[SIZE];
     swprintf_s(text, SIZE, L"Rivi %d, Sarake %d", line, column);
-    SendMessageW(hWndStatus, SB_SETTEXTW, 1, (LPARAM) text);
+    SendMessageW(hWndStatus, SB_SETTEXTW, 1, reinterpret_cast<LPARAM>(text));
 }
 
 VOID UpdateZoom() {
-    INT zoom = GetZoom();
+    CONST INT zoom = GetZoom();
     SendMessageW(ActiveEdit(), EM_SETZOOM, zoom, 100);
     CONST INT SIZE = 5;
     WCHAR text[SIZE];
     swprintf_s(text, SIZE, L"%d%%", zoom);
-    SendMessageW(hWndStatus, SB_SETTEXTW, 2, (LPARAM) text);
+    SendMessageW(hWndStatus, SB_SETTEXTW, 2, reinterpret_cast<LPARAM>(text));
 }
 
 VOID UpdateEncoding() {
-    SendMessageW(hWndStatus, SB_SETTEXTW, 4, (LPARAM) GetEncoding());
+    SendMessageW(hWndStatus, SB_SETTEXTW, 4, reinterpret_cast<LPARAM>(GetEncoding()));
 }
 
 static LRESULT CALLBACK EditProc(HWND hWnd, UINT uMsg, WPARAM wParam,
@@ -91,7 +91,7 @@ static VOID Create(HWND hWnd) {
 
     hShowMenu = CreateMenu();
     HMENU hZoomMenu = CreatePopupMenu();
-    AppendMenuW(hShowMenu, MF_STRING | MF_POPUP, (UINT_PTR) hZoomMenu, L"Zoomaus");
+    AppendMenuW(hShowMenu, MF_STRING | MF_POPUP, reinterpret_cast<UINT_PTR>(hZoomMenu), L"Zoomaus");
     AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMIN, L"Lähennä\tCtrl++");
     AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMOUT, L"Loitonna\tCtrl+-");
     AppendMenuW(hZoomMenu, MF_STRING, COMMAND_ZOOMRESET, L"Palauta oletuszoomaus\tCtrl+0");
@@ -105,11 +105,11 @@ static VOID Create(HWND hWnd) {
     AppendMenuW(hHelpMenu, MF_STRING, COMMAND_ABOUT, L"Tietoja muistiosta");
 
     HMENU hMenuBar = CreateMenu();
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFileMenu, L"Tiedosto");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hEditMenu, L"Muokkaa");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hFormatMenu, L"Muotoile");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hShowMenu, L"Näytä");
-    AppendMenuW(hMenuBar, MF_POPUP, (UINT_PTR) hHelpMenu, L"Ohje");
+    AppendMenuW(hMenuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(hFileMenu), L"Tiedosto");
+    AppendMenuW(hMenuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(hEditMenu), L"Muokkaa");
+    AppendMenuW(hMenuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(hFormatMenu), L"Muotoile");
+    AppendMenuW(hMenuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(hShowMenu), L"Näytä");
+    AppendMenuW(hMenuBar, MF_POPUP, reinterpret_cast<UINT_PTR>(hHelpMenu), L"Ohje");
     SetMenu(hWnd, hMenuBar);
 
     hWndWrapEdit = CreateWindowW(MSFTEDIT_CLASS, NULL,
@@ -139,10 +139,10 @@ VOID Resize(LONG width, LONG height) {
             statusPartEdges[i] = x;
             x -= STATUS_PART_WIDTHS[i];
         }
-        SendMessageW(hWndStatus, SB_SETPARTS, STATUS_PART_AMOUNT, (LPARAM) statusPartEdges);
+        SendMessageW(hWndStatus, SB_SETPARTS, STATUS_PART_AMOUNT, reinterpret_cast<LPARAM>(statusPartEdges));
         UpdatePosition();
         UpdateZoom();
-        SendMessageW(hWndStatus, SB_SETTEXTW, 3, (LPARAM) L"Windows (CRLF)");
+        SendMessageW(hWndStatus, SB_SETTEXTW, 3, reinterpret_cast<LPARAM>(L"Windows (CRLF)"));
         UpdateEncoding();
 
         SendMessageW(hWndStatus, WM_SIZE, 0, 0);
@@ -254,7 +254,7 @@ static LRESULT CALLBACK WindowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
     default:
         return DefWindowProcW(hWnd, uMsg, wParam, lParam);
     }
-    return NULL;
+    return 0;
 }
 
 static INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR pCmdLine, int nCmdShow) {
@@ -278,7 +278,7 @@ static INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR p
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             220, 220, 640, 480, 0, 0, hInstance, 0);
 
-    MSG msg = {};
+    MSG msg{};
     while (GetMessageW(&msg, NULL, 0, 0)) {
         if (!TranslateAcceleratorW(hWnd, hAccel, &msg)) {
             TranslateMessage(&msg);
