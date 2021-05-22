@@ -130,8 +130,7 @@ static VOID UpdatePosition() {
 }
 
 static VOID UpdateZoom() {
-    SendMessageW(hWndWrapEdit, EM_SETZOOM, zoom, 100);
-    SendMessageW(hWndNoWrapEdit, EM_SETZOOM, zoom, 100);
+    SendMessageW(ActiveEdit(), EM_SETZOOM, zoom, 100);
     CONST INT SIZE = 5;
     WCHAR text[SIZE];
     swprintf_s(text, SIZE, L"%d%%", zoom);
@@ -211,30 +210,14 @@ static VOID Zoom(BOOL up) {
 
 static LRESULT CALLBACK EditProc(HWND hWnd, UINT uMsg, WPARAM wParam,
         LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) {
-    if (uIdSubclass == wrap) {
-        switch (uMsg) {
-            case WM_MOUSEWHEEL: {
-                CONST SHORT delta = GET_WHEEL_DELTA_WPARAM(wParam);
-                CONST USHORT flags = GET_KEYSTATE_WPARAM(wParam);
-                if (flags & MK_CONTROL) {
-                    Zoom(delta > 0);
-                }
-                SendMessageW(wrap ? hWndNoWrapEdit : hWndWrapEdit, uMsg, wParam, lParam);
-                return 0;
-            }
-            case WM_CHAR:
-                UpdateTitle(GetParent(hWnd));
-            case EM_REPLACESEL:
-            case WM_SETCURSOR:
-            case WM_KEYDOWN:
-            case WM_KEYUP:
-            case WM_SYSKEYDOWN:
-            case WM_SYSKEYUP:
-            case WM_SYSCHAR:
-            case WM_SETTEXT:
-                SendMessageW(wrap ? hWndNoWrapEdit : hWndWrapEdit, uMsg, wParam, lParam);
-                break;
-        }
+    if (uMsg == WM_MOUSEWHEEL) {
+        CONST SHORT delta = GET_WHEEL_DELTA_WPARAM(wParam);
+        CONST USHORT flags = GET_KEYSTATE_WPARAM(wParam);
+        if (flags & MK_CONTROL)
+            Zoom(delta > 0);
+        return 0;
+    } else if (uMsg == WM_CHAR) {
+        UpdateTitle(GetParent(hWnd));
     }
     return DefSubclassProc(hWnd, uMsg, wParam, lParam);
 }
@@ -339,16 +322,48 @@ static VOID ToggleWordWrap(HWND hWnd) {
         CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_UNCHECKED);
         wrap = FALSE;
         GetWindowRect(hWndWrapEdit, &rect);
+        MoveWindow(hWndNoWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
+        int length = GetWindowTextLengthW(hWndWrapEdit) + 1;
+        LPWSTR text = new WCHAR[length];
+        GetWindowTextW(hWndWrapEdit, text, length);
+        SetWindowTextW(hWndNoWrapEdit, text);
+        delete[] text;
+        DWORD d0, d1;
+        SendMessageW(hWndWrapEdit, EM_GETSEL, (WPARAM) &d0, (LPARAM) &d1);
+        SendMessageW(hWndNoWrapEdit, EM_SETSEL, d0, d1);
+        BOOL modified = SendMessageW(hWndWrapEdit, EM_GETMODIFY, NULL, NULL);
+        SendMessageW(hWndNoWrapEdit, EM_SETMODIFY, modified, NULL);
+        SendMessageW(hWndWrapEdit, EM_GETZOOM, (WPARAM) &d0, (LPARAM) &d1);
+        SendMessageW(hWndNoWrapEdit, EM_SETZOOM, d0, d1);
+        CHARFORMATW format;
+        format.cbSize = sizeof(format);
+        SendMessageW(hWndWrapEdit, EM_GETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
+        SendMessageW(hWndNoWrapEdit, EM_SETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
         ShowWindow(hWndWrapEdit, SW_HIDE);
         ShowWindow(hWndNoWrapEdit, SW_SHOW);
-        MoveWindow(hWndNoWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
     } else {
         CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_CHECKED);
         wrap = TRUE;
         GetWindowRect(hWndNoWrapEdit, &rect);
+        MoveWindow(hWndWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
+        int length = GetWindowTextLengthW(hWndNoWrapEdit) + 1;
+        LPWSTR text = new WCHAR[length];
+        GetWindowTextW(hWndNoWrapEdit, text, length);
+        SetWindowTextW(hWndWrapEdit, text);
+        delete[] text;
+        DWORD d0, d1;
+        SendMessageW(hWndNoWrapEdit, EM_GETSEL, (WPARAM) &d0, (LPARAM) &d1);
+        SendMessageW(hWndWrapEdit, EM_SETSEL, d0, d1);
+        BOOL modified = SendMessageW(hWndNoWrapEdit, EM_GETMODIFY, NULL, NULL);
+        SendMessageW(hWndWrapEdit, EM_SETMODIFY, modified, NULL);
+        SendMessageW(hWndNoWrapEdit, EM_GETZOOM, (WPARAM) &d0, (LPARAM) &d1);
+        SendMessageW(hWndWrapEdit, EM_SETZOOM, d0, d1);
+        CHARFORMATW format;
+        format.cbSize = sizeof(format);
+        SendMessageW(hWndNoWrapEdit, EM_GETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
+        SendMessageW(hWndWrapEdit, EM_SETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
         ShowWindow(hWndNoWrapEdit, SW_HIDE);
         ShowWindow(hWndWrapEdit, SW_SHOW);
-        MoveWindow(hWndWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
     }
 }
 
@@ -425,7 +440,7 @@ static VOID SelectFont(HWND hWnd) {
         format.bCharSet = font.lfCharSet;
         format.bPitchAndFamily = font.lfPitchAndFamily;
         wcscpy_s(format.szFaceName, LF_FACESIZE, font.lfFaceName);
-        SendMessageW(ActiveEdit(), EM_SETCHARFORMAT, SCF_ALL, (LPARAM) &format);
+        SendMessageW(ActiveEdit(), EM_SETCHARFORMAT, SCF_DEFAULT, (LPARAM) &format);
     }
 }
 
