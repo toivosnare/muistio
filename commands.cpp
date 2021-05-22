@@ -375,3 +375,26 @@ BOOL SaveUnsavedChanges(HWND hWnd) {
     }
     return TRUE;
 }
+
+VOID Init(HWND hWnd) {
+    CONST LPWSTR commandLine = GetCommandLineW();
+    INT argc;
+    CONST LPWSTR *argv = CommandLineToArgvW(commandLine, &argc);
+    if (argc > 2) {
+        STARTUPINFOW si{};
+        si.cb = sizeof(si);
+        PROCESS_INFORMATION pi{};
+        for (INT i = 2; i < argc; ++i) {
+            CONST UINT SIZE = wcslen(argv[0]) + wcslen(argv[i]) + 2;
+            LPWSTR command = new WCHAR[SIZE];
+            swprintf_s(command, SIZE, L"%s %s", argv[0], argv[i]);
+            CreateProcessW(NULL, command, NULL, NULL, FALSE, NULL, NULL, NULL, &si, &pi);
+            delete[] command;
+        }
+    }
+    if (argc > 1 && Read(hWnd, argv[1], encoding)) {
+        wcscpy_s(openFile, MAX_PATH, argv[1]);
+        UpdateEncoding();
+    }
+    UpdateTitle(hWnd);
+}

@@ -128,7 +128,7 @@ static VOID Create(HWND hWnd) {
             WS_CHILD | WS_VISIBLE,
             0, 0, 0, 0, hWnd, 0,
             NULL, NULL);
-    UpdateTitle(hWnd);
+    Init(hWnd);
 }
 
 VOID Resize(LONG width, LONG height) {

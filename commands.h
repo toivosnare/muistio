@@ -29,3 +29,4 @@ LPCWSTR GetEncoding();
 HWND ActiveEdit();
 BOOL StatusbarActivated();
 BOOL SaveUnsavedChanges(HWND);
+VOID Init(HWND hWnd);
