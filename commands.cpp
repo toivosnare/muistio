@@ -3,6 +3,7 @@
 #include "resource.h"
 #include <cstdio>
 #include <unordered_map>
+#include <new>
 #include <commctrl.h>
 #include <Richedit.h>
 #include <shellapi.h>
@@ -216,53 +217,49 @@ VOID DateTime() {
 VOID ToggleWordWrap(HWND hWnd) {
     RECT rect;
     CONST UINT state = GetMenuState(hFormatMenu, COMMAND_WORDWRAP, MF_BYCOMMAND);
+    HWND e0, e1;
     if (state == MF_CHECKED) {
         CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_UNCHECKED);
         wrap = FALSE;
-        GetWindowRect(hWndWrapEdit, &rect);
-        MoveWindow(hWndNoWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
-        CONST INT LENGTH = GetWindowTextLengthW(hWndWrapEdit) + 1;
-        LPWSTR text = new WCHAR[LENGTH];
-        GetWindowTextW(hWndWrapEdit, text, LENGTH);
-        SetWindowTextW(hWndNoWrapEdit, text);
-        delete[] text;
-        DWORD d0, d1;
-        SendMessageW(hWndWrapEdit, EM_GETSEL, reinterpret_cast<WPARAM>(&d0), reinterpret_cast<LPARAM>(&d1));
-        SendMessageW(hWndNoWrapEdit, EM_SETSEL, d0, d1);
-        CONST BOOL modified = SendMessageW(hWndWrapEdit, EM_GETMODIFY, NULL, NULL);
-        SendMessageW(hWndNoWrapEdit, EM_SETMODIFY, modified, NULL);
-        SendMessageW(hWndWrapEdit, EM_GETZOOM, reinterpret_cast<WPARAM>(&d0), reinterpret_cast<LPARAM>(&d1));
-        SendMessageW(hWndNoWrapEdit, EM_SETZOOM, d0, d1);
-        CHARFORMATW format;
-        format.cbSize = sizeof(format);
-        SendMessageW(hWndWrapEdit, EM_GETCHARFORMAT, SCF_DEFAULT, reinterpret_cast<LPARAM>(&format));
-        SendMessageW(hWndNoWrapEdit, EM_SETCHARFORMAT, SCF_DEFAULT, reinterpret_cast<LPARAM>(&format));
-        ShowWindow(hWndWrapEdit, SW_HIDE);
-        ShowWindow(hWndNoWrapEdit, SW_SHOW);
+        e0 = hWndWrapEdit;
+        e1 = hWndNoWrapEdit;
     } else {
         CheckMenuItem(hFormatMenu, COMMAND_WORDWRAP, MF_CHECKED);
         wrap = TRUE;
-        GetWindowRect(hWndNoWrapEdit, &rect);
-        MoveWindow(hWndWrapEdit, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
-        CONST INT LENGTH = GetWindowTextLengthW(hWndNoWrapEdit) + 1;
-        LPWSTR text = new WCHAR[LENGTH];
-        GetWindowTextW(hWndNoWrapEdit, text, LENGTH);
-        SetWindowTextW(hWndWrapEdit, text);
-        delete[] text;
-        DWORD d0, d1;
-        SendMessageW(hWndNoWrapEdit, EM_GETSEL, reinterpret_cast<WPARAM>(&d0), reinterpret_cast<LPARAM>(&d1));
-        SendMessageW(hWndWrapEdit, EM_SETSEL, d0, d1);
-        CONST BOOL modified = SendMessageW(hWndNoWrapEdit, EM_GETMODIFY, NULL, NULL);
-        SendMessageW(hWndWrapEdit, EM_SETMODIFY, modified, NULL);
-        SendMessageW(hWndNoWrapEdit, EM_GETZOOM, reinterpret_cast<WPARAM>(&d0), reinterpret_cast<LPARAM>(&d1));
-        SendMessageW(hWndWrapEdit, EM_SETZOOM, d0, d1);
-        CHARFORMATW format;
-        format.cbSize = sizeof(format);
-        SendMessageW(hWndNoWrapEdit, EM_GETCHARFORMAT, SCF_DEFAULT, reinterpret_cast<LPARAM>(&format));
-        SendMessageW(hWndWrapEdit, EM_SETCHARFORMAT, SCF_DEFAULT, reinterpret_cast<LPARAM>(&format));
-        ShowWindow(hWndNoWrapEdit, SW_HIDE);
-        ShowWindow(hWndWrapEdit, SW_SHOW);
+        e0 = hWndNoWrapEdit;
+        e1 = hWndWrapEdit;
     }
+    // Position
+    GetWindowRect(e0, &rect);
+    MoveWindow(e1, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
+    // Text
+    CONST INT LENGTH = GetWindowTextLengthW(e0) + 1;
+    LPWSTR text = new (std::nothrow) WCHAR[LENGTH];
+    if (text) {
+        GetWindowTextW(e0, text, LENGTH);
+        SetWindowTextW(e1, text);
+        delete[] text;
+    } else {
+        MessageBoxW(hWnd, L"Tekstipuskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+    }
+    // Selection
+    DWORD d0, d1;
+    SendMessageW(e0, EM_GETSEL, reinterpret_cast<WPARAM>(&d0), reinterpret_cast<LPARAM>(&d1));
+    SendMessageW(e1, EM_SETSEL, d0, d1);
+    // Modification flag
+    CONST BOOL modified = SendMessageW(e0, EM_GETMODIFY, NULL, NULL);
+    SendMessageW(e1, EM_SETMODIFY, modified, NULL);
+    // Zoom
+    SendMessageW(e0, EM_GETZOOM, reinterpret_cast<WPARAM>(&d0), reinterpret_cast<LPARAM>(&d1));
+    SendMessageW(e1, EM_SETZOOM, d0, d1);
+    // Formatting
+    CHARFORMATW format;
+    format.cbSize = sizeof(format);
+    SendMessageW(e0, EM_GETCHARFORMAT, SCF_DEFAULT, reinterpret_cast<LPARAM>(&format));
+    SendMessageW(e1, EM_SETCHARFORMAT, SCF_DEFAULT, reinterpret_cast<LPARAM>(&format));
+    // Visibility
+    ShowWindow(e0, SW_HIDE);
+    ShowWindow(e1, SW_SHOW);
 }
 
 VOID SelectFont(HWND hWnd) {
