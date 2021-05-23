@@ -276,7 +276,8 @@ static INT WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR p
 
     HWND hWnd = CreateWindowW(wc.lpszClassName, L"Muistio",
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-            220, 220, 640, 480, 0, 0, hInstance, 0);
+            CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT, CW_USEDEFAULT,
+            NULL, NULL, hInstance, NULL);
 
     MSG msg{};
     while (GetMessageW(&msg, NULL, 0, 0)) {
