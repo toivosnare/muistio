@@ -25,6 +25,7 @@ static CONST std::unordered_map<ENCODING, LPCWSTR> ENCODING_CAPTIONS = {
     {UTF16LE, L"UTF-16 LE"},
 };
 static ENCODING encoding = UTF8;
+static ENCODING requestedEncoding = AUTODETECT;
 static LPCWSTR FILTERS = L"Kaikki\0*.*\0Teksti\0*.txt\0";
 static WCHAR openFile[MAX_PATH] = {0};
 static INT zoom = 100;
@@ -59,7 +60,7 @@ static UINT_PTR CALLBACK OpenProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lP
     case WM_NOTIFY: {
         CONST LPOFNOTIFYW notify = reinterpret_cast<LPOFNOTIFYW>(lParam);
         if (notify->hdr.code == CDN_FILEOK)
-            encoding = static_cast<ENCODING>(SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_GETCURSEL, NULL, NULL));
+            requestedEncoding = static_cast<ENCODING>(SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_GETCURSEL, NULL, NULL));
         break;
     }
     }
@@ -86,22 +87,24 @@ VOID Open(HWND hWnd) {
 
     if (GetOpenFileNameW(&ofn) == FALSE)
         return;
-    if (Read(hWnd, ofn.lpstrFile, encoding)) {
+    if (Read(hWnd, ofn.lpstrFile, requestedEncoding)) {
         wcscpy_s(openFile, MAX_PATH, ofn.lpstrFile);
-        UpdateEncoding();
         UpdateTitle(hWnd);
+        encoding = requestedEncoding;
+        UpdateEncoding();
     }
 }
 
-VOID Save(HWND hWnd) {
-    if (openFile[0] == '\0') {
-        SaveAs(hWnd);
-        return;
-    }
-    if (Write(hWnd, openFile, encoding)) {
+BOOL Save(HWND hWnd) {
+    if (openFile[0] == '\0')
+        return SaveAs(hWnd);
+
+    BOOL success = Write(hWnd, openFile, encoding);
+    if (success) {
         SendMessageW(ActiveEdit(), EM_SETMODIFY, FALSE, NULL);
         UpdateTitle(hWnd);
     }
+    return success;
 }
 
 static UINT_PTR CALLBACK SaveAsProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -117,14 +120,14 @@ static UINT_PTR CALLBACK SaveAsProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM 
     case WM_NOTIFY: {
         CONST LPOFNOTIFYW notify = reinterpret_cast<LPOFNOTIFYW>(lParam);
         if (notify->hdr.code == CDN_FILEOK)
-            encoding = static_cast<ENCODING>(SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_GETCURSEL, NULL, NULL) + 1);
+            requestedEncoding = static_cast<ENCODING>(SendDlgItemMessageW(hWnd, IDI_ENCODING_COMBOBOX, CB_GETCURSEL, NULL, NULL) + 1);
         break;
     }
     }
     return FALSE;
 }
 
-VOID SaveAs(HWND hWnd) {
+BOOL SaveAs(HWND hWnd) {
     WCHAR szFile[MAX_PATH];
     szFile[0] = '\0';
     OPENFILENAMEW ofn{};
@@ -140,13 +143,17 @@ VOID SaveAs(HWND hWnd) {
     ofn.lpTemplateName = MAKEINTRESOURCEW(IDI_ENCODING_DIALOG);
 
     if (GetSaveFileNameW(&ofn) == FALSE)
-        return;
-    if (Write(hWnd, ofn.lpstrFile, encoding)) {
+        return FALSE;
+
+    BOOL success = Write(hWnd, ofn.lpstrFile, requestedEncoding);
+    if (success) {
         wcscpy_s(openFile, MAX_PATH, ofn.lpstrFile);
         SendMessageW(ActiveEdit(), EM_SETMODIFY, FALSE, NULL);
-        UpdateEncoding();
         UpdateTitle(hWnd);
+        encoding = requestedEncoding;
+        UpdateEncoding();
     }
+    return success;
 }
 
 VOID Quit(HWND hWnd) {
@@ -373,7 +380,7 @@ BOOL SaveUnsavedChanges(HWND hWnd) {
         if (result == IDCANCEL)
             return FALSE;
         else if (result == IDYES)
-            Save(hWnd);
+            return Save(hWnd);
     }
     return TRUE;
 }

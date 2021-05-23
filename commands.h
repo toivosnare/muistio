@@ -3,8 +3,8 @@
 VOID New(HWND);
 VOID NewWindow();
 VOID Open(HWND);
-VOID Save(HWND);
-VOID SaveAs(HWND);
+BOOL Save(HWND);
+BOOL SaveAs(HWND);
 VOID Quit(HWND);
 VOID Undo();
 VOID Cut();
