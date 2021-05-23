@@ -15,9 +15,9 @@ static CONST INT STATUS_PART_WIDTHS[STATUS_PART_AMOUNT] = {-1, 150, 50, 150, 100
 
 VOID UpdateTitle(HWND hWnd) {
     CONST BOOL modified = SendMessageW(ActiveEdit(), EM_GETMODIFY, NULL, NULL);
-    CONST INT SIZE = 100;
-    WCHAR title[SIZE];
-    swprintf_s(title, SIZE, L"%s%s - Muistio", modified ? L"*" : L"", GetFileName());
+    CONST UINT size = MAX_PATH + 12;
+    WCHAR title[size];
+    swprintf_s(title, size, L"%s%s - Muistio", modified ? L"*" : L"", GetFileName());
     SetWindowTextW(hWnd, title);
 }
 
@@ -28,18 +28,18 @@ static VOID UpdatePosition() {
     CONST LONG line = SendMessageW(edit, EM_LINEFROMCHAR, caret, NULL) + 1;
     CONST LONG start = SendMessageW(edit, EM_LINEINDEX, line - 1, NULL);
     CONST LONG column = caret - start + 1;
-    CONST INT SIZE = 24;
-    WCHAR text[SIZE];
-    swprintf_s(text, SIZE, L"Rivi %d, Sarake %d", line, column);
+    CONST UINT size = 24;
+    WCHAR text[size];
+    swprintf_s(text, size, L"Rivi %d, Sarake %d", line, column);
     SendMessageW(hWndStatus, SB_SETTEXTW, 1, reinterpret_cast<LPARAM>(text));
 }
 
 VOID UpdateZoom() {
     CONST INT zoom = GetZoom();
     SendMessageW(ActiveEdit(), EM_SETZOOM, zoom, 100);
-    CONST INT SIZE = 5;
-    WCHAR text[SIZE];
-    swprintf_s(text, SIZE, L"%d%%", zoom);
+    CONST UINT size = 5;
+    WCHAR text[size];
+    swprintf_s(text, size, L"%d%%", zoom);
     SendMessageW(hWndStatus, SB_SETTEXTW, 2, reinterpret_cast<LPARAM>(text));
 }
 

@@ -10,16 +10,16 @@ BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding) {
         return FALSE;
     }
 
-    CONST INT BUFFER_SIZE = 16384;
-    CHAR buffer[BUFFER_SIZE];
+    CONST UINT size = 16384;
+    CHAR buffer[size];
     DWORD numberOfBytesRead;
-    CONST BOOL result = ReadFile(hFile, buffer, BUFFER_SIZE - 1, &numberOfBytesRead, NULL);
+    CONST BOOL result = ReadFile(hFile, buffer, size - 1, &numberOfBytesRead, NULL);
     CloseHandle(hFile);
     if (result == FALSE) {
         MessageBoxW(hWnd, L"Tiedoston lukeminen epäonnistui.", L"Virhe", MB_ICONERROR);
         return FALSE;
     }
-    if (numberOfBytesRead == BUFFER_SIZE - 1)
+    if (numberOfBytesRead == size - 1)
         MessageBoxW(hWnd, L"Tiedoston koko ylittää puskurin koon.", L"Varoitus", MB_ICONWARNING);
     buffer[numberOfBytesRead] = '\0';
     if (numberOfBytesRead == 0) {
@@ -115,7 +115,7 @@ BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding) {
             return FALSE;
         }
         GetWindowTextW(edit, utf16Text, utf16Length);
-        CONST INT flags = WC_ERR_INVALID_CHARS;
+        CONST DWORD flags = WC_ERR_INVALID_CHARS;
         INT utf8Length = WideCharToMultiByte(CP_UTF8, flags, utf16Text, -1, NULL, 0, NULL, NULL);
         if (utf8Length == 0) {
             MessageBoxW(hWnd, L"Tiedosto sisältää laittomia merkkejä.", L"Virhe", MB_ICONERROR);
@@ -158,7 +158,7 @@ BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding) {
         text[0] = L'\xFEFF';
         GetWindowTextW(edit, &text[1], length - 1);
         DWORD numberOfBytesWritten;
-        BOOL result = WriteFile(hFile, text, length * sizeof(WCHAR), &numberOfBytesWritten, NULL);
+        CONST BOOL result = WriteFile(hFile, text, length * sizeof(WCHAR), &numberOfBytesWritten, NULL);
         delete[] text;
         CloseHandle(hFile);
         if (result == FALSE || numberOfBytesWritten != length * sizeof(WCHAR)) {

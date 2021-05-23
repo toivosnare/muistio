@@ -100,7 +100,7 @@ BOOL Save(HWND hWnd) {
     if (openFile[0] == '\0')
         return SaveAs(hWnd);
 
-    BOOL success = Write(hWnd, openFile, encoding);
+    CONST BOOL success = Write(hWnd, openFile, encoding);
     if (success) {
         SendMessageW(ActiveEdit(), EM_SETMODIFY, FALSE, NULL);
         UpdateTitle(hWnd);
@@ -146,7 +146,7 @@ BOOL SaveAs(HWND hWnd) {
     if (GetSaveFileNameW(&ofn) == FALSE)
         return FALSE;
 
-    BOOL success = Write(hWnd, ofn.lpstrFile, requestedEncoding);
+    CONST BOOL success = Write(hWnd, ofn.lpstrFile, requestedEncoding);
     if (success) {
         wcscpy_s(openFile, MAX_PATH, ofn.lpstrFile);
         SendMessageW(ActiveEdit(), EM_SETMODIFY, FALSE, NULL);
@@ -217,9 +217,9 @@ VOID SelectAll() {
 VOID DateTime() {
     SYSTEMTIME t;
     GetLocalTime(&t);
-    CONST INT SIZE = 17;
-    WCHAR time[SIZE];
-    swprintf_s(time, SIZE, L"%u.%u %u.%u.%u", t.wHour, t.wMinute, t.wDay, t.wMonth, t.wYear);
+    CONST UINT size = 17;
+    WCHAR time[size];
+    swprintf_s(time, size, L"%u.%u %u.%u.%u", t.wHour, t.wMinute, t.wDay, t.wMonth, t.wYear);
     SendMessageW(ActiveEdit(), EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(time));
 }
 
@@ -242,10 +242,10 @@ VOID ToggleWordWrap(HWND hWnd) {
     GetWindowRect(e0, &rect);
     MoveWindow(e1, 0, 0, rect.right - rect.left, rect.bottom - rect.top, TRUE);
     // Text
-    CONST INT LENGTH = GetWindowTextLengthW(e0) + 1;
-    LPWSTR text = new (std::nothrow) WCHAR[LENGTH];
+    CONST INT length = GetWindowTextLengthW(e0) + 1;
+    LPWSTR text = new (std::nothrow) WCHAR[length];
     if (text) {
-        GetWindowTextW(e0, text, LENGTH);
+        GetWindowTextW(e0, text, length);
         SetWindowTextW(e1, text);
         delete[] text;
     } else {
@@ -276,9 +276,9 @@ VOID SelectFont(HWND hWnd) {
     format.cbSize = sizeof(format);
     SendMessageW(ActiveEdit(), EM_GETCHARFORMAT, SCF_DEFAULT, reinterpret_cast<LPARAM>(&format));
     LOGFONTW font{};
-    CONST INT PIXELS_PER_INCH = GetDeviceCaps(GetDC(hWnd), LOGPIXELSY);
-    CONST INT TWIPS_TO_INCH_RATIO = 72 * 20;
-    font.lfHeight = -MulDiv(format.yHeight, PIXELS_PER_INCH, TWIPS_TO_INCH_RATIO);
+    CONST INT pixelsPerInch = GetDeviceCaps(GetDC(hWnd), LOGPIXELSY);
+    CONST INT twipsToInchRatio = 72 * 20;
+    font.lfHeight = -MulDiv(format.yHeight, pixelsPerInch, twipsToInchRatio);
     font.lfWeight = (format.dwEffects & CFM_BOLD) ? FW_BOLD : FW_NORMAL;
     font.lfItalic = (format.dwEffects & CFM_ITALIC) ? TRUE : FALSE;
     font.lfCharSet = format.bCharSet;
@@ -296,7 +296,7 @@ VOID SelectFont(HWND hWnd) {
         format.dwEffects = 0;
         if (font.lfWeight >= FW_BOLD) format.dwEffects |= CFE_BOLD;
         if (font.lfItalic) format.dwEffects |= CFE_ITALIC;
-        format.yHeight = MulDiv(-font.lfHeight, TWIPS_TO_INCH_RATIO, PIXELS_PER_INCH);
+        format.yHeight = MulDiv(-font.lfHeight, twipsToInchRatio, pixelsPerInch);
         format.bCharSet = font.lfCharSet;
         format.bPitchAndFamily = font.lfPitchAndFamily;
         wcscpy_s(format.szFaceName, LF_FACESIZE, font.lfFaceName);
@@ -379,9 +379,9 @@ BOOL StatusbarActivated() {
 BOOL SaveUnsavedChanges(HWND hWnd) {
     CONST BOOL modified = SendMessageW(ActiveEdit(), EM_GETMODIFY, NULL, NULL);
     if (modified) {
-        CONST INT SIZE = 100;
-        WCHAR text[SIZE];
-        swprintf_s(text, SIZE, L"Haluatko tallentaa kohteeseen %s tehdyt muutokset?", GetFileName());
+        CONST UINT size = MAX_PATH + 49;
+        WCHAR text[size];
+        swprintf_s(text, size, L"Haluatko tallentaa kohteeseen %s tehdyt muutokset?", GetFileName());
         CONST INT result = MessageBoxW(hWnd, text, L"Muistio", MB_YESNOCANCEL);
         if (result == IDCANCEL)
             return FALSE;
@@ -392,20 +392,19 @@ BOOL SaveUnsavedChanges(HWND hWnd) {
 }
 
 VOID Init(HWND hWnd) {
-    CONST LPWSTR commandLine = GetCommandLineW();
     INT argc;
-    CONST LPWSTR *argv = CommandLineToArgvW(commandLine, &argc);
+    CONST LPWSTR *argv = CommandLineToArgvW(GetCommandLineW(), &argc);
     STARTUPINFOW si{};
     si.cb = sizeof(si);
     PROCESS_INFORMATION pi{};
     for (INT i = 2; i < argc; ++i) {
-        CONST UINT SIZE = wcslen(argv[0]) + wcslen(argv[i]) + 2;
-        LPWSTR command = new (std::nothrow) WCHAR[SIZE];
+        CONST UINT size = wcslen(argv[0]) + wcslen(argv[i]) + 2;
+        LPWSTR command = new (std::nothrow) WCHAR[size];
         if (!command) {
             MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
             break;
         }
-        swprintf_s(command, SIZE, L"%s %s", argv[0], argv[i]);
+        swprintf_s(command, size, L"%s %s", argv[0], argv[i]);
         CreateProcessW(NULL, command, NULL, NULL, FALSE, NULL, NULL, NULL, &si, &pi);
         delete[] command;
     }
