@@ -40,15 +40,12 @@ VOID New(HWND hWnd) {
 }
 
 VOID NewWindow() {
-    CONST LPWSTR commandLine = GetCommandLineW();
-    INT argc;
-    CONST LPWSTR *argv = CommandLineToArgvW(commandLine, &argc);
-    if (argc > 0) {
-        STARTUPINFOW si{};
-        si.cb = sizeof(si);
-        PROCESS_INFORMATION pi{};
-        CreateProcessW(argv[0], NULL, NULL, NULL, FALSE, NULL, NULL, NULL, &si, &pi);
-    }
+    WCHAR path[MAX_PATH];
+    GetModuleFileNameW(NULL, path, MAX_PATH);
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    PROCESS_INFORMATION pi{};
+    CreateProcessW(path, NULL, NULL, NULL, FALSE, NULL, NULL, NULL, &si, &pi);
 }
 
 static UINT_PTR CALLBACK OpenProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
