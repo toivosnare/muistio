@@ -1,4 +1,5 @@
 #include "fileio.h"
+#include <new>
 
 extern HWND ActiveEdit();
 
@@ -58,10 +59,14 @@ BOOL Read(HWND hWnd, LPCWSTR path, ENCODING &encoding) {
         CONST DWORD flags = MB_ERR_INVALID_CHARS;
         CONST INT utf16Length = MultiByteToWideChar(CP_UTF8, flags, buffer, -1, NULL, 0);
         if (utf16Length == 0) {
-            MessageBoxW(hWnd, L"Tiedosto sisältää laittomia UTF-8 merkkejä.", L"Varoitus", MB_ICONWARNING);
+            MessageBoxW(hWnd, L"Tiedosto sisältää laittomia UTF-8 merkkejä.", L"Virhe", MB_ICONERROR);
             return FALSE;
         }
-        LPWSTR wideBuffer = new WCHAR[utf16Length];
+        LPWSTR wideBuffer = new (std::nothrow) WCHAR[utf16Length];
+        if (!wideBuffer) {
+            MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+            return FALSE;
+        }
         MultiByteToWideChar(CP_UTF8, flags, buffer, -1, wideBuffer, utf16Length);
         SetWindowTextW(edit, wideBuffer);
         delete[] wideBuffer;
@@ -86,7 +91,11 @@ BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding) {
     switch (encoding) {
     case ANSI: {
         CONST INT length = GetWindowTextLengthA(edit) + 1;
-        LPSTR text = new CHAR[length];
+        LPSTR text = new (std::nothrow) CHAR[length];
+        if (!text) {
+            MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+            return FALSE;
+        }
         GetWindowTextA(edit, text, length);
         DWORD numberOfBytesWritten;
         CONST BOOL result = WriteFile(hFile, text, length, &numberOfBytesWritten, NULL);
@@ -100,7 +109,11 @@ BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding) {
     }
     case UTF8: {
         CONST INT utf16Length = GetWindowTextLengthW(edit) + 1;
-        LPWSTR utf16Text = new WCHAR[utf16Length];
+        LPWSTR utf16Text = new (std::nothrow) WCHAR[utf16Length];
+        if (!utf16Text) {
+            MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+            return FALSE;
+        }
         GetWindowTextW(edit, utf16Text, utf16Length);
         CONST INT flags = WC_ERR_INVALID_CHARS;
         INT utf8Length = WideCharToMultiByte(CP_UTF8, flags, utf16Text, -1, NULL, 0, NULL, NULL);
@@ -112,7 +125,13 @@ BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding) {
         }
         // Make space for the leading BOM.
         utf8Length += 3;
-        LPSTR utf8Text = new CHAR[utf8Length];
+        LPSTR utf8Text = new (std::nothrow) CHAR[utf8Length];
+        if (!utf8Text) {
+            MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+            CloseHandle(hFile);
+            delete[] utf16Text;
+            return FALSE;
+        }
         utf8Text[0] = '\xEF';
         utf8Text[1] = '\xBB';
         utf8Text[2] = '\xBF';
@@ -131,7 +150,11 @@ BOOL Write(HWND hWnd, LPCWSTR path, ENCODING encoding) {
     case UTF16LE: {
         // Add space for the leading BOM and terminating null character.
         CONST INT length = GetWindowTextLengthW(edit) + 2;
-        LPWSTR text = new WCHAR[length];
+        LPWSTR text = new (std::nothrow) WCHAR[length];
+        if (!text) {
+            MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+            return FALSE;
+        }
         text[0] = L'\xFEFF';
         GetWindowTextW(edit, &text[1], length - 1);
         DWORD numberOfBytesWritten;
