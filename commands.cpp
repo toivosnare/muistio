@@ -190,11 +190,20 @@ VOID BingSearch(HWND hWnd) {
     CONST DWORD selectionSize = end - start;
     if (selectionSize == 0)
         return;
-    LPCWSTR selection = new WCHAR[selectionSize + 1];
+    LPCWSTR selection = new (std::nothrow) WCHAR[selectionSize + 1];
+    if (!selection) {
+        MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+        return;
+    }
     SendMessageW(edit, EM_GETSELTEXT, NULL, reinterpret_cast<LPARAM>(selection));
     
     CONST DWORD urlSize = selectionSize + 31;
-    LPWSTR url = new WCHAR[urlSize];
+    LPWSTR url = new (std::nothrow) WCHAR[urlSize];
+    if (!url) {
+        MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+        delete[] selection;
+        return;
+    }
     swprintf_s(url, urlSize, L"https://www.bing.com/search?q=%s", selection);
     ShellExecuteW(hWnd, L"open", url, NULL, NULL, SW_SHOWNORMAL);
     delete[] selection;
@@ -391,7 +400,11 @@ VOID Init(HWND hWnd) {
     PROCESS_INFORMATION pi{};
     for (INT i = 2; i < argc; ++i) {
         CONST UINT SIZE = wcslen(argv[0]) + wcslen(argv[i]) + 2;
-        LPWSTR command = new WCHAR[SIZE];
+        LPWSTR command = new (std::nothrow) WCHAR[SIZE];
+        if (!command) {
+            MessageBoxW(hWnd, L"Puskurin allokointi epäonnistui.", L"Virhe", MB_ICONERROR);
+            break;
+        }
         swprintf_s(command, SIZE, L"%s %s", argv[0], argv[i]);
         CreateProcessW(NULL, command, NULL, NULL, FALSE, NULL, NULL, NULL, &si, &pi);
         delete[] command;
